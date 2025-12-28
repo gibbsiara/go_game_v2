@@ -1,0 +1,145 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+enum StoneColor {
+    BLACK
+    WHITE
+    EMPTY
+}
+
+class GoServer {
+  <<Singleton>>
+  -Scanner scanner
+  -ServerSocket serverSocket
+  -static GoServer instance
+  -boolean isRunning
+  +getInstance() GoServer
+  +start(int port)
+  +stop()
+  -getValidBoardSize() int
+}
+
+class Game {
+  -Board board
+  -ClientHandler playerBlack
+  -ClientHandler playerWhite
+  -StoneColor currentPlayer
+  -RuleEngine ruleEngine
+  +Game(int size)
+  +addPlayer(ClientHandler player)
+  +processMove(int x, int y, StoneColor playerColor)
+  -switchTurn()
+  -broadcastBoard()
+  -notifyPlayer(StoneColor color, String msg)
+}
+
+class Board {
+  -int size
+  -StoneColor[][] grid
+  -Scanner scanner
+  +Board(int size)
+  +initializeBoard()
+  +getStone(int x, int y) StoneColor
+  +setStone(int x, int y, StoneColor color)
+  +getSize() int
+  +toString() String
+}
+
+class ClientHandler {
+  <<Runnable>>
+  -Socket socket
+  -PrintWriter out
+  -BufferedReader in
+  -Game game
+  -StoneColor color
+  +ClientHandler(Socket socket, Game game, StoneColor color)
+  +run()
+  +sendMessage(String message)
+  +receiveMessage() String
+  -setupStreams()
+  -processMoveCommand(String inputLine)
+  -closeConnection()
+}
+
+class RuleEngine {
+  -Board board
+  -StoneColor currentPlayerColor
+  -ClientHandler playerBlack
+  -ClientHandler playerWhite
+  +isMoveValid(Board board, int x, int y, StoneColor playerColor) boolean
+  +playMove(Board board, int x, int y, StoneColor playerColor)
+  -checkAndProcessCaptures(Board board, int x, int y, StoneColor playerColor, boolean actuallyRemove) boolean
+  -countLiberties(Board board, int x, int y) int
+  -findGroupAndLiberties(Board board, int x, int y, StoneColor color, Set<String> visited, Set<String> liberties)
+  -removeGroup(Board board, int x, int y)
+  -isOnBoard(Board board, int x, int y) boolean
+  -notifyPlayer(StoneColor color, String msg)
+}
+
+interface Command {
+  +execute()
+}
+
+class MoveCommand {
+  -Game game
+  -int x
+  -int y
+  -StoneColor color
+  +MoveCommand(Game game, int x, int y, StoneColor color)
+  +execute()
+}
+
+class GoClient {
+  -Socket socket
+  -PrintWriter out
+  -BufferedReader in
+  -ConsoleView view
+  +GoClient(ConsoleView view)
+  +connect(String ip, int port)
+  +listenForServer()
+  +sendMove(int x, int y)
+  +sendCommand(String command)
+  +main(String[] args)
+}
+
+class ConsoleView {
+  -Scanner scanner
+  +ConsoleView(Scanner scanner)
+  +displayMessage(String msg)
+  +displayBoard(String boardData)
+  +getUserInput() String
+  -clearScreen()
+}
+
+class ServerMain {
+  +main(String[] args)
+}
+
+GoServer --> Game : creates
+GoServer ..> ClientHandler : creates
+
+Game "1" *-- "1" Board : has
+Game "1" *-- "1" RuleEngine : has
+Game "1" o-- "2" ClientHandler : communicates with
+
+ClientHandler "1" --> "1" Game : belongs to
+ClientHandler ..> MoveCommand : creates
+MoveCommand ..|> Command : implements
+MoveCommand --> Game : modifies
+
+RuleEngine --> ClientHandler : notifies
+
+GoClient "1" --> "1" ConsoleView : has
+GoClient ..> ClientHandler : connects to
+ServerMain --> GoServer : starts
+
+GoServer *-- Scanner
+ConsoleView *-- Scanner
+
+Game ..> StoneColor : uses
+Board ..> StoneColor : uses
+ClientHandler ..> StoneColor : uses
+MoveCommand ..> StoneColor : uses
+RuleEngine ..> StoneColor : uses
+
+@enduml

@@ -8,8 +8,8 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 public class ServerMain extends Application {
-    ValidateUserPort validateUserPort = new ValidateUserPort();
-    AlertView alertView = new AlertView();
+    private ValidateUserPort validateUserPort = new ValidateUserPort();
+    private AlertView alertView = new AlertView();
     public void start(Stage primaryStage) {
 
         primaryStage.setTitle("Go Server");

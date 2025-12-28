@@ -10,7 +10,6 @@ public final class GoServer {
     private Scanner scanner;
     private ServerSocket serverSocket;
     private boolean isRunning;
-
     private GoServer() {
         this.scanner = new Scanner(System.in);
     }
@@ -26,7 +25,6 @@ public final class GoServer {
         try {
             serverSocket = new ServerSocket(port);
             isRunning = true;
-
             while (isRunning) {
                 int boardSize = getValidBoardSize();
                 Game game = new Game(boardSize);
@@ -35,7 +33,7 @@ public final class GoServer {
 
                 Socket socket1 = serverSocket.accept();
                 System.out.println("Połączono gracza 1 [BLACK]");
-                
+
                 ClientHandler player1 = new ClientHandler(socket1, game, StoneColor.BLACK);
                 game.addPlayer(player1);
 
@@ -60,7 +58,7 @@ public final class GoServer {
                     System.out.println("Serwer przerwany podczas gry");
                     Thread.currentThread().interrupt();
                 }
-                
+
                 System.out.println("Gra zakończyła się");
             }
 

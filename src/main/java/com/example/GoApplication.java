@@ -53,13 +53,13 @@ public class GoApplication extends Application {
         ComboBox<Integer> sizeBox = new ComboBox<>();
         sizeBox.getItems().addAll(9, 13, 19);
         sizeBox.setValue(19);
-        Button startServerBtn = new Button("Uruchom Serwer i Dołącz");
+        Button startServerBtn = new Button("Uruchom serwer i dołącz do gry");
 
         hostContent.getChildren().addAll(new Label("Port:"), hostPortField, new Label("Rozmiar:"), sizeBox, startServerBtn);
         hostPane.setContent(hostContent);
 
         TitledPane joinPane = new TitledPane();
-        joinPane.setText("Dołącz do Gry");
+        joinPane.setText("Dołącz do gry");
         joinPane.setCollapsible(false);
         VBox joinContent = new VBox(10);
         TextField joinPortField = new TextField("12345");
@@ -103,7 +103,7 @@ public class GoApplication extends Application {
     private void connectToServer(String ip, int port, int initialSize) {
         try {
             client.connect(ip, port);
-            buildGameScreen(initialSize > 0 ? initialSize : 19);
+            buildGameScreen(initialSize);
         } catch (Exception e) {
             alertView.showAlert("Błąd", "Nie udało się połączyć: " + e.getMessage(), Alert.AlertType.ERROR);
         }

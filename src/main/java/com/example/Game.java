@@ -37,7 +37,16 @@ public class Game {
     }
 
     private void broadcastBoard() {
-        String boardData = board.toString().replace('\n', ';');
+        StringBuilder sb = new StringBuilder();
+
+        int size = board.getSize();
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                sb.append(board.getStone(x, y).toString());
+                sb.append(";");
+            }
+        }
+        String boardData = sb.toString();
         String message = "BOARD " + boardData;
     
         if (playerBlack != null) playerBlack.sendMessage(message);

@@ -1,13 +1,10 @@
 package com.example;
 
-import java.util.Scanner;
-
 public class Board {
     private int size;
     private StoneColor[][] grid;
-    private Scanner scanner;
-    public Board(int size) {
 
+    public Board(int size) {
         this.size = size;
         this.grid = new StoneColor[size][size];
         initializeBoard();
@@ -32,8 +29,28 @@ public class Board {
         grid[x][y] = color;
     }
 
-    public int  getSize() {
+    public int getSize() {
         return size;
+    }
+
+    public StoneColor[][] getGridCopy() {
+        StoneColor[][] copy = new StoneColor[size][size];
+        for (int i = 0; i < size; i++) {
+            System.arraycopy(grid[i], 0, copy[i], 0, size);
+        }
+        return copy;
+    }
+
+    public boolean hasSameStateAs(StoneColor[][] otherGrid) {
+        if (otherGrid == null) return false;
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                if (grid[i][j] != otherGrid[i][j]) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     public String toString() {

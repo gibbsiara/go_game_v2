@@ -4,8 +4,16 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
@@ -32,6 +40,7 @@ public class GoApplication extends Application {
     public void start(Stage stage) {
         this.primaryStage = stage;
         this.client = new GoClient(this);
+        this.alertView = new AlertView();
 
         showMainMenu();
     }
@@ -113,15 +122,33 @@ public class GoApplication extends Application {
         this.currentBoardSize = size;
         gameRoot = new BorderPane();
 
+        VBox rightPanel = new VBox(10);
+        rightPanel.setPadding(new Insets(10));
+
         messageArea = new TextArea();
         messageArea.setEditable(false);
         messageArea.setPrefWidth(200);
-        gameRoot.setRight(messageArea);
+        messageArea.setPrefHeight(400);
+
+        Button passBtn = new Button("Pasuj");
+        passBtn.setMaxWidth(Double.MAX_VALUE);
+        passBtn.setOnAction(e -> client.sendPass());
+
+        Button surrenderBtn = new Button("Poddaj się");
+        surrenderBtn.setMaxWidth(Double.MAX_VALUE);
+        surrenderBtn.setOnAction(e -> client.sendSurrender());
+
+        Button resumeBtn = new Button("Wznów grę (Spór)");
+        resumeBtn.setMaxWidth(Double.MAX_VALUE);
+        resumeBtn.setOnAction(e -> client.sendResume());
+
+        rightPanel.getChildren().addAll(messageArea, passBtn, surrenderBtn, resumeBtn);
+        gameRoot.setRight(rightPanel);
 
         createBoardView(size);
         gameRoot.setCenter(boardPane);
 
-        Scene gameScene = new Scene(gameRoot, 800, 600);
+        Scene gameScene = new Scene(gameRoot, 850, 600);
         primaryStage.setScene(gameScene);
         primaryStage.centerOnScreen();
     }

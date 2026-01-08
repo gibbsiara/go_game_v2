@@ -33,6 +33,15 @@ public class ClientHandler implements Runnable {
 
                 if (inputLine.startsWith("MOVE")) {
                     processMoveCommand(inputLine);
+                } else if (inputLine.startsWith("PASS")) {
+                    Command command = new PassCommand(game, color);
+                    command.execute();
+                } else if (inputLine.startsWith("SURRENDER")) {
+                    Command command = new SurrenderCommand(game, color);
+                    command.execute();
+                } else if (inputLine.startsWith("RESUME")) {
+                    Command command = new ResumeCommand(game, color);
+                    command.execute();
                 } else if (inputLine.startsWith("QUIT")) {
                     break;
                 }

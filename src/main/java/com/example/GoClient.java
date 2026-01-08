@@ -1,11 +1,12 @@
 package com.example;
 
-import javafx.application.Platform;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+
+import javafx.application.Platform;
 
 public class GoClient {
     private Socket socket;
@@ -50,6 +51,24 @@ public class GoClient {
     public void sendMove(int x, int y) {
         if (out != null) {
             out.println("MOVE " + x + " " + y);
+        }
+    }
+
+    public void sendPass() {
+        if (out != null) {
+            out.println("PASS");
+        }
+    }
+
+    public void sendSurrender() {
+        if (out != null) {
+            out.println("SURRENDER");
+        }
+    }
+
+    public void sendResume() {
+        if (out != null) {
+            out.println("RESUME");
         }
     }
 

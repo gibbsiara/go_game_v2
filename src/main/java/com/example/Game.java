@@ -29,7 +29,20 @@ public class Game {
 
     public synchronized void processMove(int x, int y, StoneColor playerColor) {
         if (isGameOver) {
-            notifyPlayer(playerColor, "MESSAGE Gra skończona. Nie można wykonywać ruchów.");
+            if (board.getStone(x, y) != StoneColor.EMPTY) {
+                if (board.getStone(x, y) == StoneColor.BLACK) {
+                    whitePrisoners++;
+                } else {
+                    blackPrisoners++;
+                }
+
+                board.setStone(x, y, StoneColor.EMPTY);
+        
+                broadcastBoard();
+
+                String scoreSummary = ruleEngine.calculateScore(board, blackPrisoners, whitePrisoners);
+                broadcastMessage("MESSAGE AKTUALIZACJA WYNIKU (usunięto martwy kamień):\n" + scoreSummary);
+            }
             return;
         }
         if (playerColor != currentPlayer) {

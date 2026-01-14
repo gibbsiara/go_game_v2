@@ -2,13 +2,15 @@ package com.example;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 
 public class RuleEngine {
     private ClientHandler playerBlack;
     private ClientHandler playerWhite;
-    private StoneColor[][] previousBoardState = null; 
+    private StoneColor[][] previousBoardState = null;
 
     public boolean isMoveValid(Board board, int x, int y, StoneColor playerColor) {
         if (x < 0 || x >= board.getSize() || y < 0 || y >= board.getSize()) {
@@ -61,19 +63,49 @@ public class RuleEngine {
     }
 
     public String calculateScore(Board board, int blackPrisoners, int whitePrisoners) {
-        int blackTerritory = 0;
-        int whiteTerritory = 0;
         int size = board.getSize();
         boolean[][] visited = new boolean[size][size];
+        List<Region> allRegions = new ArrayList<>();
 
         for (int x = 0; x < size; x++) {
             for (int y = 0; y < size; y++) {
                 if (board.getStone(x, y) == StoneColor.EMPTY && !visited[x][y]) {
-                    TerritoryResult result = analyzeTerritory(board, visited, x, y);
-                    if (result.owner == StoneColor.BLACK) {
-                        blackTerritory += result.count;
-                    } else if (result.owner == StoneColor.WHITE) {
-                        whiteTerritory += result.count;
+                    allRegions.add(analyzeRegion(board, visited, x, y));
+                }
+            }
+        }
+
+        Set<String> neutralPoints = new HashSet<>();
+        for (Region r : allRegions) {
+            if (r.borderColors.size() > 1) {
+                for (int[] p : r.points) {
+                    neutralPoints.add(p[0] + "," + p[1]);
+                }
+            }
+        }
+
+        Set<String> stonesInSeki = findStonesInSeki(board, neutralPoints);
+
+        int blackTerritory = 0;
+        int whiteTerritory = 0;
+
+        for (Region r : allRegions) {
+            if (r.borderColors.size() == 1) {
+                StoneColor owner = r.borderColors.iterator().next();
+                
+                boolean touchesSeki = false;
+                for (int[] bp : r.borderStones) {
+                    if (stonesInSeki.contains(bp[0] + "," + bp[1])) {
+                        touchesSeki = true;
+                        break;
+                    }
+                }
+
+                if (!touchesSeki) {
+                    if (owner == StoneColor.BLACK) {
+                        blackTerritory += r.points.size();
+                    } else if (owner == StoneColor.WHITE) {
+                        whiteTerritory += r.points.size();
                     }
                 }
             }
@@ -86,51 +118,78 @@ public class RuleEngine {
                "Białe: " + whiteTotal + " (Teren: " + whiteTerritory + ", Jeńcy: " + whitePrisoners + ")";
     }
 
-    private TerritoryResult analyzeTerritory(Board board, boolean[][] visited, int startX, int startY) {
+    private static class Region {
         List<int[]> points = new ArrayList<>();
         Set<StoneColor> borderColors = new HashSet<>();
-        
-        List<int[]> queue = new ArrayList<>();
+        List<int[]> borderStones = new ArrayList<>();
+    }
+
+    private Region analyzeRegion(Board board, boolean[][] visited, int startX, int startY) {
+        Region region = new Region();
+        Queue<int[]> queue = new LinkedList<>();
         queue.add(new int[]{startX, startY});
         visited[startX][startY] = true;
 
         while (!queue.isEmpty()) {
-            int[] p = queue.remove(0);
-            points.add(p);
-            int cx = p[0], cy = p[1];
+            int[] p = queue.poll();
+            region.points.add(p);
 
-            int[][] neighbors = {{cx+1, cy}, {cx-1, cy}, {cx, cy+1}, {cx, cy-1}};
+            int[][] neighbors = {{p[0]+1, p[1]}, {p[0]-1, p[1]}, {p[0], p[1]+1}, {p[0], p[1]-1}};
             for (int[] n : neighbors) {
-                int nx = n[0], ny = n[1];
-                if (isOnBoard(board, nx, ny)) {
-                    StoneColor color = board.getStone(nx, ny);
+                if (isOnBoard(board, n[0], n[1])) {
+                    StoneColor color = board.getStone(n[0], n[1]);
                     if (color == StoneColor.EMPTY) {
-                        if (!visited[nx][ny]) {
-                            visited[nx][ny] = true;
-                            queue.add(new int[]{nx, ny});
+                        if (!visited[n[0]][n[1]]) {
+                            visited[n[0]][n[1]] = true;
+                            queue.add(new int[]{n[0], n[1]});
                         }
                     } else {
-                        borderColors.add(color);
+                        region.borderColors.add(color);
+                        region.borderStones.add(new int[]{n[0], n[1]});
                     }
                 }
             }
         }
-
-        StoneColor owner = StoneColor.EMPTY;
-        if (borderColors.size() == 1) {
-            if (borderColors.contains(StoneColor.BLACK)) owner = StoneColor.BLACK;
-            if (borderColors.contains(StoneColor.WHITE)) owner = StoneColor.WHITE;
-        }
-
-        return new TerritoryResult(owner, points.size());
+        return region;
     }
 
-    private static class TerritoryResult {
-        StoneColor owner;
-        int count;
-        public TerritoryResult(StoneColor owner, int count) {
-            this.owner = owner;
-            this.count = count;
+    private Set<String> findStonesInSeki(Board board, Set<String> neutralPoints) {
+        Set<String> inSeki = new HashSet<>();
+        int size = board.getSize();
+        
+        for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+                StoneColor color = board.getStone(x, y);
+                if (color != StoneColor.EMPTY) {
+                    if (touchesNeutral(x, y, neutralPoints)) {
+                        markGroupAsSeki(board, x, y, color, inSeki);
+                    }
+                }
+            }
+        }
+        return inSeki;
+    }
+
+    private boolean touchesNeutral(int x, int y, Set<String> neutralPoints) {
+        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
+        for (int[] n : neighbors) {
+            if (neutralPoints.contains(n[0] + "," + n[1])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void markGroupAsSeki(Board board, int x, int y, StoneColor color, Set<String> sekiSet) {
+        String key = x + "," + y;
+        if (sekiSet.contains(key)) return;
+        sekiSet.add(key);
+
+        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
+        for (int[] n : neighbors) {
+            if (isOnBoard(board, n[0], n[1]) && board.getStone(n[0], n[1]) == color) {
+                markGroupAsSeki(board, n[0], n[1], color, sekiSet);
+            }
         }
     }
 

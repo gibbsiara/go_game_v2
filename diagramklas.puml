@@ -1,0 +1,171 @@
+@startuml
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package "Core Game Logic" {
+    enum StoneColor {
+        BLACK
+        WHITE
+        EMPTY
+    }
+
+    class Board {
+        - size : int
+        - grid : StoneColor[][]
+        + Board(size : int)
+        + initializeBoard()
+        + getStone(x : int, y : int) : StoneColor
+        + setStone(x : int, y : int, color : StoneColor)
+        + getGridCopy() : StoneColor[][]
+        + hasSameStateAs(otherGrid : StoneColor[][]) : boolean
+    }
+
+    class RuleEngine {
+        - playerBlack : ClientHandler
+        - playerWhite : ClientHandler
+        - previousBoardState : StoneColor[][]
+        + isMoveValid(board : Board, x : int, y : int, color : StoneColor) : boolean
+        + setPlayers(black : ClientHandler, white : ClientHandler)
+        + calculateScore(...) : String
+        - checkCapturesSimulation(...) : boolean
+        - removeDeadOpponentGroups(...) : List<int[]>
+        - countLiberties(...) : int
+        - isKo(...) : boolean
+    }
+
+    class Game {
+        - currentPlayer : StoneColor
+        - previousPlayerPassed : boolean
+        - isGameOver : boolean
+        - blackPrisoners : int
+        - whitePrisoners : int
+        + Game(size : int)
+        + addPlayer(player : ClientHandler)
+        + processMove(x : int, y : int, color : StoneColor)
+        + processPass(color : StoneColor)
+        + processSurrender(color : StoneColor)
+        + processResume(color : StoneColor)
+        - broadcastBoard()
+        - broadcastMessage(msg : String)
+    }
+}
+
+package "Server Side" {
+    class GoServer {
+        - {static} instance : GoServer
+        - serverSocket : ServerSocket
+        - isRunning : boolean
+        - GoServer()
+        + {static} getInstance() : GoServer
+        + start(port : int, size : int)
+        + stop()
+    }
+
+    class ClientHandler implements Runnable {
+        - socket : Socket
+        - in : BufferedReader
+        - out : PrintWriter
+        - color : StoneColor
+        + ClientHandler(socket : Socket, game : Game, color : StoneColor)
+        + run()
+        + sendMessage(message : String)
+        - processMoveCommand(inputLine : String)
+    }
+}
+
+package "Command Pattern" {
+    interface Command {
+        + execute()
+    }
+
+    class MoveCommand implements Command {
+        - x : int
+        - y : int
+        - color : StoneColor
+        + MoveCommand(game : Game, x : int, y : int, color : StoneColor)
+        + execute()
+    }
+
+    class PassCommand implements Command {
+        - playerColor : StoneColor
+        + PassCommand(game : Game, playerColor : StoneColor)
+        + execute()
+    }
+
+    class SurrenderCommand implements Command {
+        - playerColor : StoneColor
+        + SurrenderCommand(game : Game, playerColor : StoneColor)
+        + execute()
+    }
+
+    class ResumeCommand implements Command {
+        - playerColor : StoneColor
+        + ResumeCommand(game : Game, playerColor : StoneColor)
+        + execute()
+    }
+}
+
+package "Client Side (JavaFX)" {
+    class GoApplication {
+        - currentBoardSize : int
+        - stones : Circle[][]
+        - messageArea : TextArea
+        - boardPane : Pane
+        + {static} main(args : String[])
+        + start(stage : Stage)
+        + updateBoard(boardData : String)
+        + appendLog(message : String)
+        - createBoardView(size : int)
+    }
+
+    class GoClient {
+        - socket : Socket
+        - out : PrintWriter
+        - in : BufferedReader
+        + GoClient(gui : GoApplication)
+        + connect(ip : String, port : int)
+        + sendMove(x : int, y : int)
+        + sendPass()
+        + sendSurrender()
+        + sendQuit()
+        - listenForServer()
+    }
+
+    class AlertView {
+        + showAlert(title : String, message : String, type : AlertType)
+    }
+
+    class ConsoleView {
+        - scanner : Scanner
+        + displayMessage(msg : String)
+        + displayBoard(boardData : String)
+        + getUserInput() : String
+    }
+}
+
+
+GoServer --> Game : creates >
+GoServer ..> ClientHandler : creates >
+Game *-- Board
+Game *-- RuleEngine
+Game o-- "2" ClientHandler : manages >
+RuleEngine --> ClientHandler : notifies >
+RuleEngine ..> Board : analyzes >
+
+ClientHandler --> Game : references >
+ClientHandler ..> Command : creates & executes >
+ClientHandler --> StoneColor : has >
+
+MoveCommand --> Game
+PassCommand --> Game
+SurrenderCommand --> Game
+ResumeCommand --> Game
+
+GoApplication --|> javafx.application.Application
+GoApplication --> GoClient : uses >
+GoClient --> GoApplication : updates GUI >
+GoApplication --> AlertView : uses >
+GoApplication --> ConsoleView : optionally uses >
+
+@enduml

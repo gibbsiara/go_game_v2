@@ -4,6 +4,10 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+/**
+ * Singleton server class that manages the game session lifecycle.
+ * Responsible for accepting player connections and initializing the game logic.
+ */
 public final class GoServer {
     private static GoServer instance;
     private ServerSocket serverSocket;
@@ -11,6 +15,10 @@ public final class GoServer {
 
     private GoServer() {}
 
+    /**
+     * Retrieves the single instance of the GoServer.
+     * @return The singleton GoServer instance.
+     */
     public static GoServer getInstance() {
         if (instance == null) {
             instance = new GoServer();
@@ -18,6 +26,12 @@ public final class GoServer {
         return instance;
     }
 
+    /**
+     * Starts the server on a specified port and board size.
+     * Runs on a separate thread to accept two players and start the game loop.
+     * @param port The port number to listen on.
+     * @param size The size of the game board.
+     */
     public void start(int port, int size) {
         new Thread(() -> {
             try {
@@ -55,6 +69,9 @@ public final class GoServer {
         }).start();
     }
 
+    /**
+     * Stops the server and closes the active socket connection.
+     */
     public void stop() {
         isRunning = false;
         try {

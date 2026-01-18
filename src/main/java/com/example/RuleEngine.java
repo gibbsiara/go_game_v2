@@ -7,11 +7,24 @@ import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
+/**
+ * Handles the specific rules and logic of the game of Go.
+ * Responsible for move validation, capturing stones, and calculating the final score.
+ */
 public class RuleEngine {
     private ClientHandler playerBlack;
     private ClientHandler playerWhite;
     private StoneColor[][] previousBoardState = null;
 
+    /**
+     * Checks if a proposed move is legal according to Go rules.
+     * Validates bounds, occupancy, suicide rules, and the Ko rule.
+     * @param board The current board state.
+     * @param x The X-coordinate of the move.
+     * @param y The Y-coordinate of the move.
+     * @param playerColor The color of the stone being placed.
+     * @return true if the move is valid, false otherwise.
+     */
     public boolean isMoveValid(Board board, int x, int y, StoneColor playerColor) {
         if (x < 0 || x >= board.getSize() || y < 0 || y >= board.getSize()) {
             notifyPlayer(playerColor, "MESSAGE: Ruch poza planszą!");
@@ -54,6 +67,15 @@ public class RuleEngine {
         return true;
     }
 
+    /**
+     * Executes a valid move on the board and removes captured stones.
+     * Updates the previous board state for future Ko checks.
+     * @param board The current board being played on.
+     * @param x The X-coordinate.
+     * @param y The Y-coordinate.
+     * @param playerColor The color of the stone.
+     * @return The number of stones captured by this move.
+     */
     public int playMove(Board board, int x, int y, StoneColor playerColor) {
         previousBoardState = board.getGridCopy();
         board.setStone(x, y, playerColor);
@@ -62,6 +84,14 @@ public class RuleEngine {
         return removed.size();
     }
 
+    /**
+     * Calculates the final score based on territory and prisoners.
+     * Analyzes empty regions to determine ownership (Black or White territory).
+     * @param board The final board state.
+     * @param blackPrisoners Total prisoners held by Black.
+     * @param whitePrisoners Total prisoners held by White.
+     * @return A string summary of the scores.
+     */
     public String calculateScore(Board board, int blackPrisoners, int whitePrisoners) {
         int size = board.getSize();
         boolean[][] visited = new boolean[size][size];
@@ -118,6 +148,10 @@ public class RuleEngine {
                "Białe: " + whiteTotal + " (Teren: " + whiteTerritory + ", Jeńcy: " + whitePrisoners + ")";
     }
 
+    /**
+     * Helper class representing a connected region of empty points.
+     * Used for territory analysis.
+     */
     private static class Region {
         List<int[]> points = new ArrayList<>();
         Set<StoneColor> borderColors = new HashSet<>();
@@ -256,6 +290,11 @@ public class RuleEngine {
         return x >= 0 && x < board.getSize() && y >= 0 && y < board.getSize();
     }
     
+    /**
+     * Sets the active player handlers for communication.
+     * @param black The handler for the Black player.
+     * @param white The handler for the White player.
+     */
     public void setPlayers(ClientHandler black, ClientHandler white) {
         this.playerBlack = black;
         this.playerWhite = white;

@@ -6,6 +6,10 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+/**
+ * Handles the server-side connection for a single player.
+ * Runs on a separate thread to receive and process messages from the client.
+ */
 public class ClientHandler implements Runnable {
     private Socket socket;
     private PrintWriter out;
@@ -13,6 +17,12 @@ public class ClientHandler implements Runnable {
     private Game game;
     private StoneColor color;
 
+    /**
+     * Initializes the client handler with the socket and game reference.
+     * @param socket The connected socket for the player.
+     * @param game The main game instance.
+     * @param color The color assigned to this player.
+     */
     public ClientHandler(Socket socket, Game game, StoneColor color) {
         this.socket = socket;
         this.game = game;
@@ -20,6 +30,10 @@ public class ClientHandler implements Runnable {
     }
 
 
+    /**
+     * The main execution loop for the client thread.
+     * Listens for commands (MOVE, PASS, etc.) and executes them via the Command pattern.
+     */
     @Override
     public void run() {
         try {
@@ -53,20 +67,39 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Initializes input and output streams for communication.
+     * Sends the assigned color to the client immediately upon connection.
+     * @throws IOException If stream creation fails.
+     */
     private void setupStreams() throws IOException {
         out = new PrintWriter(socket.getOutputStream(), true);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         sendMessage("Twój kolor to: " + color);
     }
 
+    /**
+     * Reads a single line of text from the client.
+     * @return The message string sent by the client.
+     * @throws IOException If reading from the stream fails.
+     */
     public String receiveMessage() throws IOException {
         return in.readLine();
     }
 
+    /**
+     * Sends a raw string message to the client.
+     * @param message The text to send.
+     */
     public void sendMessage(String message) {
         out.println(message);
     }
 
+    /**
+     * Parses a move command string and executes the corresponding logic.
+     * Expected format: "MOVE x y".
+     * @param inputLine The raw command string received from the client.
+     */
     private void processMoveCommand(String inputLine) {
         try {
             String[] parts = inputLine.split(" ");
@@ -81,6 +114,9 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Closes the socket connection safely.
+     */
     private void closeConnection() {
         try {
             socket.close();

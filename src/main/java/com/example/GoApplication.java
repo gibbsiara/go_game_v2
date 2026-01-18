@@ -20,7 +20,10 @@ import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
-
+/**
+ * Main JavaFX application class for the Go game client.
+ * Manages the UI lifecycle, including the main menu and the game board view.
+ */
 public class GoApplication extends Application {
 
     private GoClient client;
@@ -35,7 +38,10 @@ public class GoApplication extends Application {
     public static void main(String[] args) {
         launch(args);
     }
-
+    /**
+     * Initializes the JavaFX stage and displays the main menu.
+     * @param stage The primary window for this application.
+     */
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
@@ -44,7 +50,10 @@ public class GoApplication extends Application {
 
         showMainMenu();
     }
-
+    /**
+     * Displays the main menu of the game.
+     * Allows the user to enter server details (IP, port), select board size, and connect to a game.
+     */
     private void showMainMenu() {
         VBox menuBox = new VBox(15);
         menuBox.setAlignment(Pos.CENTER);
@@ -117,7 +126,11 @@ public class GoApplication extends Application {
             alertView.showAlert("Błąd", "Nie udało się połączyć: " + e.getMessage(), Alert.AlertType.ERROR);
         }
     }
-
+    /**
+     * Sets up the main game interface once a connection is established.
+     * Organizes the layout with the game board in the center and control panels on the sides.
+     * @param size The size of the Go board (e.g., 9, 13, or 19).
+     */
     private void buildGameScreen(int size) {
         this.currentBoardSize = size;
         gameRoot = new BorderPane();
@@ -152,7 +165,12 @@ public class GoApplication extends Application {
         primaryStage.setScene(gameScene);
         primaryStage.centerOnScreen();
     }
-
+    /**
+     * Creates the graphical representation of the Go board.
+     * Draws the grid lines and initializes the 'stones' array with hidden circles
+     * that act as placeholders for future moves.
+     * @param size The number of intersections per side.
+     */
     private void createBoardView(int size) {
         int cellSize = 30;
         boardPane = new Pane();
@@ -191,7 +209,12 @@ public class GoApplication extends Application {
         boardPane.setPrefSize((size + 1) * cellSize + 20, (size + 1) * cellSize + 20);
     }
 
-
+    /**
+     * Updates the visual state of the board based on data received from the server.
+     * If the board size has changed (e.g., when joining a new game), it regenerates the view.
+     * It maps the string data to the corresponding colors (BLACK, WHITE, or TRANSPARENT).
+     * @param boardData A string containing the state of all intersections, separated by semicolons.
+     */
     public void updateBoard(String boardData) {
 
         String[] fields = boardData.split(";");
@@ -223,7 +246,11 @@ public class GoApplication extends Application {
             }
         }
     }
-
+    /**
+     * Appends a new message or log entry to the text area in the side panel.
+     * Automatically scrolls to the bottom to show the latest information.
+     * @param message The text to be added to the log.
+     */
     public void appendLog(String message) {
         messageArea.appendText(message + "\n");
     }

@@ -158,6 +158,15 @@ public class RuleEngine {
         List<int[]> borderStones = new ArrayList<>();
     }
 
+    /**
+     * Performs a Breadth-First Search (BFS) to identify a connected region of empty intersections.
+     * Determines which stone colors border this region to assign territory.
+     * @param board The game board.
+     * @param visited Array tracking visited nodes to prevent loops.
+     * @param startX Starting X coordinate.
+     * @param startY Starting Y coordinate.
+     * @return A Region object containing the empty points and bordering stone info.
+     */
     private Region analyzeRegion(Board board, boolean[][] visited, int startX, int startY) {
         Region region = new Region();
         Queue<int[]> queue = new LinkedList<>();
@@ -187,6 +196,13 @@ public class RuleEngine {
         return region;
     }
 
+    /**
+     * Identifies stones that are in a "Seki" (mutual life) state.
+     * Checks if groups touch neutral points that neither player can claim.
+     * @param board The game board.
+     * @param neutralPoints A set of coordinates representing neutral territory.
+     * @return A set of string keys ("x,y") representing stones in Seki.
+     */
     private Set<String> findStonesInSeki(Board board, Set<String> neutralPoints) {
         Set<String> inSeki = new HashSet<>();
         int size = board.getSize();
@@ -204,6 +220,13 @@ public class RuleEngine {
         return inSeki;
     }
 
+    /**
+     * Checks if a specific board coordinate is adjacent to a neutral point.
+     * @param x X coordinate.
+     * @param y Y coordinate.
+     * @param neutralPoints The set of pre-calculated neutral points.
+     * @return true if adjacent to a neutral point.
+     */
     private boolean touchesNeutral(int x, int y, Set<String> neutralPoints) {
         int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
         for (int[] n : neighbors) {
@@ -214,6 +237,14 @@ public class RuleEngine {
         return false;
     }
 
+    /**
+     * Recursively marks an entire group of connected stones as being in Seki.
+     * @param board The game board.
+     * @param x Current X coordinate.
+     * @param y Current Y coordinate.
+     * @param color The color of the group being marked.
+     * @param sekiSet The set to populate with Seki coordinates.
+     */
     private void markGroupAsSeki(Board board, int x, int y, StoneColor color, Set<String> sekiSet) {
         String key = x + "," + y;
         if (sekiSet.contains(key)) return;
@@ -227,6 +258,15 @@ public class RuleEngine {
         }
     }
 
+    /**
+     * Simulates a move to check if it would capture any opponent stones.
+     * This is used to allow "suicide" moves if they result in a capture.
+     * @param board The board state.
+     * @param x X coordinate of the proposed move.
+     * @param y Y coordinate of the proposed move.
+     * @param playerColor The player making the move.
+     * @return true if the move results in capturing opponent stones.
+     */
     private boolean checkCapturesSimulation(Board board, int x, int y, StoneColor playerColor) {
         StoneColor opponentColor = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
         int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
@@ -239,6 +279,14 @@ public class RuleEngine {
         return false;
     }
 
+    /**
+     * Removes groups of opponent stones that have zero liberties.
+     * @param board The board state.
+     * @param x The X coordinate of the move that just happened.
+     * @param y The Y coordinate of the move that just happened.
+     * @param playerColor The color of the player who just moved.
+     * @return A list of coordinates of the removed stones.
+     */
     private List<int[]> removeDeadOpponentGroups(Board board, int x, int y, StoneColor playerColor) {
         List<int[]> removedStones = new ArrayList<>();
         StoneColor opponentColor = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
@@ -256,6 +304,14 @@ public class RuleEngine {
         return removedStones;
     }
 
+    /**
+     * Recursively collects all connected stones of a specific color into a list.
+     * @param board The board state.
+     * @param x Current X coordinate.
+     * @param y Current Y coordinate.
+     * @param color The color of the group being collected.
+     * @param group The list to populate with group coordinates.
+     */
     private void collectGroup(Board board, int x, int y, StoneColor color, List<int[]> group) {
         if (board.getStone(x, y) != color) return;
         for(int[] pos : group) if (pos[0] == x && pos[1] == y) return;
@@ -264,6 +320,13 @@ public class RuleEngine {
         for (int[] n : neighbors) if (isOnBoard(board, n[0], n[1])) collectGroup(board, n[0], n[1], color, group);
     }
 
+    /**
+     * Counts the number of liberties (empty adjacent intersections) for a group of stones.
+     * @param board The board state.
+     * @param x X coordinate of a stone in the group.
+     * @param y Y coordinate of a stone in the group.
+     * @return The number of unique liberties available to the group.
+     */
     private int countLiberties(Board board, int x, int y) {
         Set<String> visited = new HashSet<>();
         Set<String> liberties = new HashSet<>();
@@ -271,6 +334,15 @@ public class RuleEngine {
         return liberties.size();
     }
 
+    /**
+     * Recursive helper to traverse a group and identify unique liberties.
+     * @param board The board state.
+     * @param x Current X coordinate.
+     * @param y Current Y coordinate.
+     * @param color The color of the group.
+     * @param visited Set of visited stones to prevent infinite recursion.
+     * @param liberties Set to populate with liberty coordinates.
+     */
     private void findGroupAndLiberties(Board board, int x, int y, StoneColor color, Set<String> visited, Set<String> liberties) {
         String pos = x + "," + y;
         if (visited.contains(pos) || !isOnBoard(board, x, y)) return;

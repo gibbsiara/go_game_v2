@@ -4,10 +4,6 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-/**
- * Singleton server class that manages the game session lifecycle.
- * Responsible for accepting player connections and initializing the game logic.
- */
 public final class GoServer {
     private static GoServer instance;
     private ServerSocket serverSocket;
@@ -15,10 +11,6 @@ public final class GoServer {
 
     private GoServer() {}
 
-    /**
-     * Retrieves the single instance of the GoServer.
-     * @return The singleton GoServer instance.
-     */
     public static GoServer getInstance() {
         if (instance == null) {
             instance = new GoServer();
@@ -27,51 +19,50 @@ public final class GoServer {
     }
 
     /**
-     * Starts the server on a specified port and board size.
-     * Runs on a separate thread to accept two players and start the game loop.
-     * @param port The port number to listen on.
-     * @param size The size of the game board.
+     * Startuje serwer.
+     * @param port Port serwera
+     * @param size Rozmiar planszy
+     * @param playWithBot TRUE = gra z botem, FALSE = czekaj na drugiego gracza
      */
-    public void start(int port, int size) {
+    public void start(int port, int size, boolean playWithBot) {
         new Thread(() -> {
             try {
                 serverSocket = new ServerSocket(port);
                 isRunning = true;
-                System.out.println("Serwer wystartował na porcie: " + port + ", rozmiar: " + size);
+                System.out.println("SERWER START: Port " + port + ", Rozmiar " + size);
+                System.out.println("TRYB: " + (playWithBot ? "Człowiek vs Bot" : "Multiplayer"));
 
                 Game game = new Game(size);
 
+                System.out.println("Oczekiwanie na Gracza 1 (Czarne)...");
                 Socket socket1 = serverSocket.accept();
-                System.out.println("Gracz 1 dołączył.");
+                System.out.println("Gracz 1 połączony.");
+
                 ClientHandler player1 = new ClientHandler(socket1, game, StoneColor.BLACK);
                 game.addPlayer(player1);
+                new Thread(player1).start();
 
-                Socket socket2 = serverSocket.accept();
-                System.out.println("Gracz 2 dołączył.");
-                ClientHandler player2 = new ClientHandler(socket2, game, StoneColor.WHITE);
-                game.addPlayer(player2);
+                if (playWithBot) {
+                    System.out.println("Dodawanie Bota (Białe)...");
+                    BotPlayer bot = new BotPlayer(game, StoneColor.WHITE);
+                    game.addPlayer(bot);
+                    new Thread(bot).start();
+                } else {
+                    System.out.println("Oczekiwanie na Gracza 2 (Białe)...");
+                    Socket socket2 = serverSocket.accept();
+                    System.out.println("Gracz 2 połączony.");
 
-                Thread t1 = new Thread(player1);
-                Thread t2 = new Thread(player2);
-                t1.start();
-                t2.start();
-
-                try {
-                    t1.join();
-                    t2.join();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                    ClientHandler player2 = new ClientHandler(socket2, game, StoneColor.WHITE);
+                    game.addPlayer(player2);
+                    new Thread(player2).start();
                 }
 
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Błąd serwera: " + e.getMessage());
             }
         }).start();
     }
 
-    /**
-     * Stops the server and closes the active socket connection.
-     */
     public void stop() {
         isRunning = false;
         try {

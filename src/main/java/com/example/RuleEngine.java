@@ -2,9 +2,7 @@ package com.example;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 import java.util.Set;
 
 /**
@@ -12,348 +10,212 @@ import java.util.Set;
  * Responsible for move validation, capturing stones, and calculating the final score.
  */
 public class RuleEngine {
-    private ClientHandler playerBlack;
-    private ClientHandler playerWhite;
-    private StoneColor[][] previousBoardState = null;
+    private Player playerBlack;
+    private Player playerWhite;
+
+    private StoneColor[][] stateOneTurnAgo = null;
+    private StoneColor[][] stateTwoTurnsAgo = null;
+
+    private int lastCapturedCount = 0;
 
     /**
      * Checks if a proposed move is legal according to Go rules.
      * Validates bounds, occupancy, suicide rules, and the Ko rule.
-     * @param board The current board state.
-     * @param x The X-coordinate of the move.
-     * @param y The Y-coordinate of the move.
-     * @param playerColor The color of the stone being placed.
-     * @return true if the move is valid, false otherwise.
      */
     public boolean isMoveValid(Board board, int x, int y, StoneColor playerColor) {
+        lastCapturedCount = 0;
+
         if (x < 0 || x >= board.getSize() || y < 0 || y >= board.getSize()) {
-            notifyPlayer(playerColor, "MESSAGE: Ruch poza planszą!");
+            notifyPlayer(playerColor, "MESSAGE Błąd: Ruch poza planszą!");
             return false;
         }
+
         if (board.getStone(x, y) != StoneColor.EMPTY) {
-            notifyPlayer(playerColor, "MESSAGE: Pole jest zajęte!");
+            notifyPlayer(playerColor, "MESSAGE Błąd: Pole jest już zajęte!");
             return false;
         }
 
         StoneColor originalColor = board.getStone(x, y);
         board.setStone(x, y, playerColor);
 
-        boolean capturesOpponent = checkCapturesSimulation(board, x, y, playerColor);
-        int selfLiberties = countLiberties(board, x, y);
+        boolean captures = checkCaptures(board, x, y, playerColor);
+        boolean hasLiberties = hasLiberties(board, x, y, playerColor);
 
-        if (selfLiberties == 0 && !capturesOpponent) {
+        if (!hasLiberties && !captures) {
             board.setStone(x, y, originalColor);
-            notifyPlayer(playerColor, "MESSAGE: Ruch samobójczy jest zabroniony!");
+            notifyPlayer(playerColor, "MESSAGE Błąd: Ruch samobójczy jest zabroniony!");
             return false;
         }
 
-        if (previousBoardState != null) {
-            List<int[]> capturedStones = removeDeadOpponentGroups(board, x, y, playerColor);
-            boolean isKo = board.hasSameStateAs(previousBoardState);
+        StoneColor[][] stateBeforeCapture = board.getGridCopy();
 
-            for (int[] pos : capturedStones) {
-                board.setStone(pos[0], pos[1], (playerColor == StoneColor.BLACK ? StoneColor.WHITE : StoneColor.BLACK));
-            }
-            board.setStone(x, y, originalColor);
-
-            if (isKo) {
-                notifyPlayer(playerColor, "MESSAGE: Zasada KO! Nie możesz powtórzyć pozycji planszy.");
-                return false;
-            }
-        } else {
-            board.setStone(x, y, originalColor);
+        if (captures) {
+            removeDeadStones(board, x, y, playerColor);
         }
+
+        if (stateTwoTurnsAgo != null && board.hasSameStateAs(stateTwoTurnsAgo)) {
+            restoreBoardState(board, stateBeforeCapture);
+            board.setStone(x, y, StoneColor.EMPTY);
+            lastCapturedCount = 0;
+
+            notifyPlayer(playerColor, "MESSAGE Błąd: Zasada KO (nie możesz powtórzyć pozycji)!");
+            return false;
+        }
+
+        stateTwoTurnsAgo = stateOneTurnAgo;
+        stateOneTurnAgo = board.getGridCopy();
 
         return true;
     }
 
     /**
-     * Executes a valid move on the board and removes captured stones.
-     * Updates the previous board state for future Ko checks.
-     * @param board The current board being played on.
-     * @param x The X-coordinate.
-     * @param y The Y-coordinate.
-     * @param playerColor The color of the stone.
-     * @return The number of stones captured by this move.
+     * Zwraca liczbę kamieni zbitych w ostatnim zaakceptowanym ruchu.
+     * Wywoływane przez Game.java po isMoveValid() == true.
      */
-    public int playMove(Board board, int x, int y, StoneColor playerColor) {
-        previousBoardState = board.getGridCopy();
-        board.setStone(x, y, playerColor);
-        
-        List<int[]> removed = removeDeadOpponentGroups(board, x, y, playerColor);
-        return removed.size();
+    public int getLastCapturedCount() {
+        return lastCapturedCount;
     }
 
+
+    private boolean checkCaptures(Board board, int x, int y, StoneColor playerColor) {
+        StoneColor opponentColor = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
+        int[][] neighbors = {{x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}};
+
+        for (int[] n : neighbors) {
+            int nx = n[0];
+            int ny = n[1];
+            if (isOnBoard(board, nx, ny) && board.getStone(nx, ny) == opponentColor) {
+                if (!hasLiberties(board, nx, ny, opponentColor)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void removeDeadStones(Board board, int x, int y, StoneColor playerColor) {
+        StoneColor opponentColor = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
+        int[][] neighbors = {{x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}};
+
+        for (int[] n : neighbors) {
+            int nx = n[0];
+            int ny = n[1];
+            if (isOnBoard(board, nx, ny) && board.getStone(nx, ny) == opponentColor) {
+                if (!hasLiberties(board, nx, ny, opponentColor)) {
+                    Set<String> group = new HashSet<>();
+                    findGroupAndLiberties(board, nx, ny, opponentColor, group, new HashSet<>());
+
+                    lastCapturedCount += group.size();
+
+                    for (String pos : group) {
+                        String[] coords = pos.split(",");
+                        board.setStone(Integer.parseInt(coords[0]), Integer.parseInt(coords[1]), StoneColor.EMPTY);
+                    }
+                }
+            }
+        }
+    }
+
+
     /**
-     * Calculates the final score based on territory and prisoners.
-     * Analyzes empty regions to determine ownership (Black or White territory).
-     * @param board The final board state.
-     * @param blackPrisoners Total prisoners held by Black.
-     * @param whitePrisoners Total prisoners held by White.
-     * @return A string summary of the scores.
+     * Oblicza terytorium dla obu graczy.
+     * Zwraca tablicę: [punktyCzarnego, punktyBiałego].
+     * Terytorium to puste pola otoczone wyłącznie przez kamienie jednego koloru.
      */
-    public String calculateScore(Board board, int blackPrisoners, int whitePrisoners) {
+    public int[] countTerritory(Board board) {
+        int blackTerritory = 0;
+        int whiteTerritory = 0;
         int size = board.getSize();
         boolean[][] visited = new boolean[size][size];
-        List<Region> allRegions = new ArrayList<>();
 
         for (int x = 0; x < size; x++) {
             for (int y = 0; y < size; y++) {
                 if (board.getStone(x, y) == StoneColor.EMPTY && !visited[x][y]) {
-                    allRegions.add(analyzeRegion(board, visited, x, y));
-                }
-            }
-        }
+                    RegionResult result = exploreRegion(board, x, y, visited);
 
-        Set<String> neutralPoints = new HashSet<>();
-        for (Region r : allRegions) {
-            if (r.borderColors.size() > 1) {
-                for (int[] p : r.points) {
-                    neutralPoints.add(p[0] + "," + p[1]);
-                }
-            }
-        }
-
-        Set<String> stonesInSeki = findStonesInSeki(board, neutralPoints);
-
-        int blackTerritory = 0;
-        int whiteTerritory = 0;
-
-        for (Region r : allRegions) {
-            if (r.borderColors.size() == 1) {
-                StoneColor owner = r.borderColors.iterator().next();
-                
-                boolean touchesSeki = false;
-                for (int[] bp : r.borderStones) {
-                    if (stonesInSeki.contains(bp[0] + "," + bp[1])) {
-                        touchesSeki = true;
-                        break;
-                    }
-                }
-
-                if (!touchesSeki) {
-                    if (owner == StoneColor.BLACK) {
-                        blackTerritory += r.points.size();
-                    } else if (owner == StoneColor.WHITE) {
-                        whiteTerritory += r.points.size();
+                    if (result.surroundedByBlack && !result.surroundedByWhite) {
+                        blackTerritory += result.size;
+                    } else if (!result.surroundedByBlack && result.surroundedByWhite) {
+                        whiteTerritory += result.size;
                     }
                 }
             }
         }
-
-        int blackTotal = blackTerritory + blackPrisoners;
-        int whiteTotal = whiteTerritory + whitePrisoners;
-
-        return "Czarne: " + blackTotal + " (Teren: " + blackTerritory + ", Jeńcy: " + blackPrisoners + ")\n" +
-               "Białe: " + whiteTotal + " (Teren: " + whiteTerritory + ", Jeńcy: " + whitePrisoners + ")";
+        return new int[]{blackTerritory, whiteTerritory};
     }
 
-    /**
-     * Helper class representing a connected region of empty points.
-     * Used for territory analysis.
-     */
-    private static class Region {
-        List<int[]> points = new ArrayList<>();
-        Set<StoneColor> borderColors = new HashSet<>();
-        List<int[]> borderStones = new ArrayList<>();
+    private static class RegionResult {
+        int size = 0;
+        boolean surroundedByBlack = false;
+        boolean surroundedByWhite = false;
     }
 
-    /**
-     * Performs a Breadth-First Search (BFS) to identify a connected region of empty intersections.
-     * Determines which stone colors border this region to assign territory.
-     * @param board The game board.
-     * @param visited Array tracking visited nodes to prevent loops.
-     * @param startX Starting X coordinate.
-     * @param startY Starting Y coordinate.
-     * @return A Region object containing the empty points and bordering stone info.
-     */
-    private Region analyzeRegion(Board board, boolean[][] visited, int startX, int startY) {
-        Region region = new Region();
-        Queue<int[]> queue = new LinkedList<>();
+    private RegionResult exploreRegion(Board board, int startX, int startY, boolean[][] visited) {
+        RegionResult result = new RegionResult();
+        List<int[]> queue = new ArrayList<>();
         queue.add(new int[]{startX, startY});
         visited[startX][startY] = true;
 
-        while (!queue.isEmpty()) {
-            int[] p = queue.poll();
-            region.points.add(p);
+        int head = 0;
+        while(head < queue.size()){
+            int[] curr = queue.get(head++);
+            int cx = curr[0];
+            int cy = curr[1];
+            result.size++;
 
-            int[][] neighbors = {{p[0]+1, p[1]}, {p[0]-1, p[1]}, {p[0], p[1]+1}, {p[0], p[1]-1}};
+            int[][] neighbors = {{cx+1, cy}, {cx-1, cy}, {cx, cy+1}, {cx, cy-1}};
             for (int[] n : neighbors) {
-                if (isOnBoard(board, n[0], n[1])) {
-                    StoneColor color = board.getStone(n[0], n[1]);
-                    if (color == StoneColor.EMPTY) {
-                        if (!visited[n[0]][n[1]]) {
-                            visited[n[0]][n[1]] = true;
-                            queue.add(new int[]{n[0], n[1]});
+                int nx = n[0];
+                int ny = n[1];
+
+                if (isOnBoard(board, nx, ny)) {
+                    StoneColor neighbor = board.getStone(nx, ny);
+                    if (neighbor == StoneColor.EMPTY) {
+                        if (!visited[nx][ny]) {
+                            visited[nx][ny] = true;
+                            queue.add(new int[]{nx, ny});
                         }
-                    } else {
-                        region.borderColors.add(color);
-                        region.borderStones.add(new int[]{n[0], n[1]});
+                    } else if (neighbor == StoneColor.BLACK) {
+                        result.surroundedByBlack = true;
+                    } else if (neighbor == StoneColor.WHITE) {
+                        result.surroundedByWhite = true;
                     }
                 }
             }
         }
-        return region;
+        return result;
     }
 
-    /**
-     * Identifies stones that are in a "Seki" (mutual life) state.
-     * Checks if groups touch neutral points that neither player can claim.
-     * @param board The game board.
-     * @param neutralPoints A set of coordinates representing neutral territory.
-     * @return A set of string keys ("x,y") representing stones in Seki.
-     */
-    private Set<String> findStonesInSeki(Board board, Set<String> neutralPoints) {
-        Set<String> inSeki = new HashSet<>();
-        int size = board.getSize();
-        
-        for (int x = 0; x < size; x++) {
-            for (int y = 0; y < size; y++) {
-                StoneColor color = board.getStone(x, y);
-                if (color != StoneColor.EMPTY) {
-                    if (touchesNeutral(x, y, neutralPoints)) {
-                        markGroupAsSeki(board, x, y, color, inSeki);
-                    }
-                }
-            }
-        }
-        return inSeki;
-    }
-
-    /**
-     * Checks if a specific board coordinate is adjacent to a neutral point.
-     * @param x X coordinate.
-     * @param y Y coordinate.
-     * @param neutralPoints The set of pre-calculated neutral points.
-     * @return true if adjacent to a neutral point.
-     */
-    private boolean touchesNeutral(int x, int y, Set<String> neutralPoints) {
-        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
-        for (int[] n : neighbors) {
-            if (neutralPoints.contains(n[0] + "," + n[1])) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Recursively marks an entire group of connected stones as being in Seki.
-     * @param board The game board.
-     * @param x Current X coordinate.
-     * @param y Current Y coordinate.
-     * @param color The color of the group being marked.
-     * @param sekiSet The set to populate with Seki coordinates.
-     */
-    private void markGroupAsSeki(Board board, int x, int y, StoneColor color, Set<String> sekiSet) {
-        String key = x + "," + y;
-        if (sekiSet.contains(key)) return;
-        sekiSet.add(key);
-
-        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
-        for (int[] n : neighbors) {
-            if (isOnBoard(board, n[0], n[1]) && board.getStone(n[0], n[1]) == color) {
-                markGroupAsSeki(board, n[0], n[1], color, sekiSet);
+    private void restoreBoardState(Board board, StoneColor[][] snapshot) {
+        for(int i=0; i<board.getSize(); i++) {
+            for(int j=0; j<board.getSize(); j++) {
+                board.setStone(i, j, snapshot[i][j]);
             }
         }
     }
 
-    /**
-     * Simulates a move to check if it would capture any opponent stones.
-     * This is used to allow "suicide" moves if they result in a capture.
-     * @param board The board state.
-     * @param x X coordinate of the proposed move.
-     * @param y Y coordinate of the proposed move.
-     * @param playerColor The player making the move.
-     * @return true if the move results in capturing opponent stones.
-     */
-    private boolean checkCapturesSimulation(Board board, int x, int y, StoneColor playerColor) {
-        StoneColor opponentColor = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
-        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
-        for (int[] n : neighbors) {
-            int nx = n[0], ny = n[1];
-            if (isOnBoard(board, nx, ny) && board.getStone(nx, ny) == opponentColor) {
-                if (countLiberties(board, nx, ny) == 0) return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Removes groups of opponent stones that have zero liberties.
-     * @param board The board state.
-     * @param x The X coordinate of the move that just happened.
-     * @param y The Y coordinate of the move that just happened.
-     * @param playerColor The color of the player who just moved.
-     * @return A list of coordinates of the removed stones.
-     */
-    private List<int[]> removeDeadOpponentGroups(Board board, int x, int y, StoneColor playerColor) {
-        List<int[]> removedStones = new ArrayList<>();
-        StoneColor opponentColor = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
-        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
-        
-        for (int[] n : neighbors) {
-            int nx = n[0], ny = n[1];
-            if (isOnBoard(board, nx, ny) && board.getStone(nx, ny) == opponentColor) {
-                if (countLiberties(board, nx, ny) == 0) {
-                    collectGroup(board, nx, ny, opponentColor, removedStones);
-                }
-            }
-        }
-        for (int[] pos : removedStones) board.setStone(pos[0], pos[1], StoneColor.EMPTY);
-        return removedStones;
-    }
-
-    /**
-     * Recursively collects all connected stones of a specific color into a list.
-     * @param board The board state.
-     * @param x Current X coordinate.
-     * @param y Current Y coordinate.
-     * @param color The color of the group being collected.
-     * @param group The list to populate with group coordinates.
-     */
-    private void collectGroup(Board board, int x, int y, StoneColor color, List<int[]> group) {
-        if (board.getStone(x, y) != color) return;
-        for(int[] pos : group) if (pos[0] == x && pos[1] == y) return;
-        group.add(new int[]{x, y});
-        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
-        for (int[] n : neighbors) if (isOnBoard(board, n[0], n[1])) collectGroup(board, n[0], n[1], color, group);
-    }
-
-    /**
-     * Counts the number of liberties (empty adjacent intersections) for a group of stones.
-     * @param board The board state.
-     * @param x X coordinate of a stone in the group.
-     * @param y Y coordinate of a stone in the group.
-     * @return The number of unique liberties available to the group.
-     */
-    private int countLiberties(Board board, int x, int y) {
+    private boolean hasLiberties(Board board, int x, int y, StoneColor color) {
         Set<String> visited = new HashSet<>();
         Set<String> liberties = new HashSet<>();
-        findGroupAndLiberties(board, x, y, board.getStone(x, y), visited, liberties);
-        return liberties.size();
+        findGroupAndLiberties(board, x, y, color, visited, liberties);
+        return !liberties.isEmpty();
     }
 
-    /**
-     * Recursive helper to traverse a group and identify unique liberties.
-     * @param board The board state.
-     * @param x Current X coordinate.
-     * @param y Current Y coordinate.
-     * @param color The color of the group.
-     * @param visited Set of visited stones to prevent infinite recursion.
-     * @param liberties Set to populate with liberty coordinates.
-     */
     private void findGroupAndLiberties(Board board, int x, int y, StoneColor color, Set<String> visited, Set<String> liberties) {
         String pos = x + "," + y;
-        if (visited.contains(pos) || !isOnBoard(board, x, y)) return;
+        if (visited.contains(pos)) return;
         visited.add(pos);
-        int[][] neighbors = {{x+1, y}, {x-1, y}, {x, y+1}, {x, y-1}};
+
+        int[][] neighbors = {{x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}};
         for (int[] n : neighbors) {
             int nx = n[0], ny = n[1];
             if (isOnBoard(board, nx, ny)) {
                 StoneColor neighborStone = board.getStone(nx, ny);
-                if (neighborStone == StoneColor.EMPTY) liberties.add(nx + "," + ny);
-                else if (neighborStone == color) findGroupAndLiberties(board, nx, ny, color, visited, liberties);
+                if (neighborStone == StoneColor.EMPTY) {
+                    liberties.add(nx + "," + ny);
+                } else if (neighborStone == color) {
+                    findGroupAndLiberties(board, nx, ny, color, visited, liberties);
+                }
             }
         }
     }
@@ -361,19 +223,17 @@ public class RuleEngine {
     private boolean isOnBoard(Board board, int x, int y) {
         return x >= 0 && x < board.getSize() && y >= 0 && y < board.getSize();
     }
-    
-    /**
-     * Sets the active player handlers for communication.
-     * @param black The handler for the Black player.
-     * @param white The handler for the White player.
-     */
-    public void setPlayers(ClientHandler black, ClientHandler white) {
+
+    public void setPlayers(Player black, Player white) {
         this.playerBlack = black;
         this.playerWhite = white;
     }
 
     private void notifyPlayer(StoneColor color, String msg) {
-        if (color == StoneColor.BLACK && playerBlack != null) playerBlack.sendMessage(msg);
-        else if (color == StoneColor.WHITE && playerWhite != null) playerWhite.sendMessage(msg);
+        if (color == StoneColor.BLACK && playerBlack != null) {
+            playerBlack.sendMessage(msg);
+        } else if (color == StoneColor.WHITE && playerWhite != null) {
+            playerWhite.sendMessage(msg);
+        }
     }
 }

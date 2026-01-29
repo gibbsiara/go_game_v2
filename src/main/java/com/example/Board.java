@@ -1,22 +1,20 @@
 package com.example;
+
 /**
  * Represents the logical structure of a Go board.
- * It maintains the state of every intersection (grid point) on the board.
+ * Maintains the state of intersections and provides utilities for game rules and GUI.
  */
 public class Board {
 
     private int size;
     private StoneColor[][] grid;
-    /**
-     * Initializes a new board with a specific size and fills it with EMPTY states.
-     *  @param size The number of lines per side (e.g., 9, 13, or 19).
-     */
+
     public Board(int size) {
         this.size = size;
         this.grid = new StoneColor[size][size];
         initializeBoard();
     }
-    
+
     public void initializeBoard() {
         for (int i = 0; i < size; i++) {
             for (int j = 0; j < size; j++) {
@@ -24,13 +22,10 @@ public class Board {
             }
         }
     }
-    /**
-     * Retrieves the stone color at the specified coordinates.
-     * @param x The X-coordinate (column).
-     * @param y The Y-coordinate (row).
-     * @return The StoneColor at the position, or null if coordinates are out of bounds.
-     */
 
+    public int getSize() {
+        return size;
+    }
 
     public StoneColor getStone(int x, int y) {
         if (x < 0 || x >= size || y < 0 || y >= size) {
@@ -38,23 +33,17 @@ public class Board {
         }
         return grid[x][y];
     }
-    /**
-     * Places a stone of a specific color at the given coordinates.
-     * * @param x The X-coordinate.
-     * @param y The Y-coordinate.
-     * @param color The StoneColor to set at the position.
-     */
 
     public void setStone(int x, int y, StoneColor color) {
-        grid[x][y] = color;
+        if (x >= 0 && x < size && y >= 0 && y < size) {
+            grid[x][y] = color;
+        }
     }
 
-    public int getSize() {
-        return size;
-    }
+
     /**
-     * Returns a deep copy of the current board grid.
-     * @return A 2D array representing the current state of the board.
+     * Creates a deep copy of the current board grid.
+     * Used by RuleEngine to store history for KO rule.
      */
     public StoneColor[][] getGridCopy() {
         StoneColor[][] copy = new StoneColor[size][size];
@@ -63,10 +52,9 @@ public class Board {
         }
         return copy;
     }
+
     /**
-     * Compares the current board state with another grid.
-     * @param otherGrid The grid to compare against.
-     * @return true if the states are identical; false otherwise.
+     * Compares the current board state with another grid (for KO rule).
      */
     public boolean hasSameStateAs(StoneColor[][] otherGrid) {
         if (otherGrid == null) return false;
@@ -80,23 +68,35 @@ public class Board {
         return true;
     }
 
+
+    /**
+     * Zwraca stan planszy w formacie zrozumiałym dla Klienta GUI.
+     * Format: "EMPTY;BLACK;EMPTY;WHITE;..."
+     */
+    public String getBoardStateString() {
+        StringBuilder sb = new StringBuilder();
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                sb.append(grid[x][y].toString());
+                if (x != size - 1 || y != size - 1) {
+                    sb.append(";");
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
         for (int y = 0; y < size; y++) {
             for (int x = 0; x < size; x++) {
-                if (grid[x][y] == StoneColor.EMPTY) {
-                    str.append(' ');
-                } else if (grid[x][y] == StoneColor.BLACK) {
-                    str.append('X');
-                } else {
-                    str.append('O');
-                }
-
-                if (x < size - 1) {
-                    str.append("-");
-                }
+                if (grid[x][y] == StoneColor.EMPTY) str.append('.');
+                else if (grid[x][y] == StoneColor.BLACK) str.append('X');
+                else str.append('O');
+                str.append(" ");
             }
-            str.append('\n');
+            str.append("\n");
         }
         return str.toString();
     }

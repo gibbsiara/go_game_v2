@@ -1,29 +1,19 @@
 package com.example;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextArea;
-import javafx.scene.control.TextField;
-import javafx.scene.control.TitledPane;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.Pane;
-import javafx.scene.layout.VBox;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
-import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
-/**
- * Main JavaFX application class for the Go game client.
- * Manages the UI lifecycle, including the main menu and the game board view.
- */
+import java.io.IOException;
+
 public class GoApplication extends Application {
 
     private GoClient client;
@@ -35,224 +25,289 @@ public class GoApplication extends Application {
     private AlertView alertView;
     private Circle[][] stones;
 
+    private static final int CELL_SIZE = 35;
+
     public static void main(String[] args) {
         launch(args);
     }
-    /**
-     * Initializes the JavaFX stage and displays the main menu.
-     * @param stage The primary window for this application.
-     */
+
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
-        this.client = new GoClient(this);
         this.alertView = new AlertView();
+        this.client = new GoClient(this);
 
         showMainMenu();
     }
-    /**
-     * Displays the main menu of the game.
-     * Allows the user to enter server details (IP, port), select board size, and connect to a game.
-     */
+
     private void showMainMenu() {
-        VBox menuBox = new VBox(15);
-        menuBox.setAlignment(Pos.CENTER);
-        menuBox.setPadding(new Insets(20));
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(30));
+        root.setAlignment(Pos.CENTER);
+        root.setStyle("-fx-background-color: #f4f4f4; -fx-font-family: 'Arial';");
 
-        Label title = new Label("Gra w Go");
-        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        Label titleLabel = new Label("Gra w GO");
+        titleLabel.setStyle("-fx-font-size: 32px; -fx-font-weight: bold; -fx-text-fill: #333;");
 
-        TitledPane hostPane = new TitledPane();
-        hostPane.setText("Stwórz Serwer");
-        hostPane.setCollapsible(false);
-        VBox hostContent = new VBox(10);
-        TextField hostPortField = new TextField("12345");
-        hostPortField.setPromptText("Port");
+        GridPane configGrid = new GridPane();
+        configGrid.setHgap(10);
+        configGrid.setVgap(10);
+        configGrid.setAlignment(Pos.CENTER);
+
+        TextField portField = new TextField("8080");
+        portField.setPromptText("Port");
+        portField.setPrefWidth(100);
+
         ComboBox<Integer> sizeBox = new ComboBox<>();
         sizeBox.getItems().addAll(9, 13, 19);
         sizeBox.setValue(19);
-        Button startServerBtn = new Button("Uruchom serwer i dołącz do gry");
+        sizeBox.setPrefWidth(100);
 
-        hostContent.getChildren().addAll(new Label("Port:"), hostPortField, new Label("Rozmiar:"), sizeBox, startServerBtn);
-        hostPane.setContent(hostContent);
+        configGrid.add(new Label("Port:"), 0, 0);
+        configGrid.add(portField, 1, 0);
+        configGrid.add(new Label("Rozmiar:"), 0, 1);
+        configGrid.add(sizeBox, 1, 1);
 
-        TitledPane joinPane = new TitledPane();
-        joinPane.setText("Dołącz do gry");
-        joinPane.setCollapsible(false);
-        VBox joinContent = new VBox(10);
-        TextField joinPortField = new TextField("12345");
-        ComboBox<Integer> joinSizeBox = new ComboBox<>();
-        joinSizeBox.getItems().addAll(9, 13, 19);
-        joinSizeBox.setValue(19);
-        Button joinBtn = new Button("Połącz");
+        Label hostLabel = new Label("--- Stwórz Grę (Host) ---");
+        hostLabel.setStyle("-fx-font-weight: bold; -fx-padding: 10 0 5 0;");
 
-        joinContent.getChildren().addAll( new Label("Rozmiar:"), joinSizeBox, new Label("Port:"), joinPortField, joinBtn);
-        joinPane.setContent(joinContent);
-
-        menuBox.getChildren().addAll(title, hostPane, joinPane);
-
-        startServerBtn.setOnAction(e -> {
-            try {
-                int port = Integer.parseInt(hostPortField.getText());
-                int size = sizeBox.getValue();
-                GoServer.getInstance().start(port, size);
-                connectToServer("localhost", port, size);
-            } catch (Exception ex) {
-                alertView.showAlert("Błąd", "Błąd uruchamiania serwera: " + ex.getMessage(), Alert.AlertType.ERROR);
-            }
+        Button btnVsBot = new Button("Graj z BOTEM (Singleplayer)");
+        styleButton(btnVsBot, "#4CAF50");
+        btnVsBot.setOnAction(e -> {
+            int port = parsePort(portField.getText());
+            if (port > 0) startLocalGame(port, sizeBox.getValue(), true);
         });
 
-        joinBtn.setOnAction(e -> {
-            try {
-                int port = Integer.parseInt(joinPortField.getText());
-                int size = sizeBox.getValue();
-                connectToServer("localhost", port, size);
-            } catch (Exception ex) {
-                alertView.showAlert("Błąd", "Błąd połączenia: " + ex.getMessage(), Alert.AlertType.ERROR);
-            }
+        Button btnHostPvP = new Button("Graj z LUDŹMI (Multiplayer)");
+        styleButton(btnHostPvP, "#2196F3");
+        btnHostPvP.setOnAction(e -> {
+            int port = parsePort(portField.getText());
+            if (port > 0) startLocalGame(port, sizeBox.getValue(), false);
         });
 
-        Scene scene = new Scene(menuBox, 400, 500);
-        primaryStage.setTitle("Go Game Launcher");
+        Label joinLabel = new Label("--- Dołącz do Gry (Klient) ---");
+        joinLabel.setStyle("-fx-font-weight: bold; -fx-padding: 10 0 5 0;");
+
+        HBox joinBox = new HBox(10);
+        joinBox.setAlignment(Pos.CENTER);
+        TextField ipField = new TextField("localhost");
+        ipField.setPromptText("Adres IP");
+
+        Button btnJoin = new Button("Połącz");
+        styleButton(btnJoin, "#FF9800");
+        btnJoin.setOnAction(e -> {
+            int port = parsePort(portField.getText());
+            if (port > 0) connectToServer(ipField.getText(), port);
+        });
+        joinBox.getChildren().addAll(ipField, btnJoin);
+
+        root.getChildren().addAll(titleLabel, configGrid, hostLabel, btnVsBot, btnHostPvP, joinLabel, joinBox);
+
+        Scene scene = new Scene(root, 450, 650);
+        primaryStage.setTitle("Go Game - Menu");
         primaryStage.setScene(scene);
+        primaryStage.centerOnScreen();
         primaryStage.show();
     }
 
-    private void connectToServer(String ip, int port, int initialSize) {
+    private void startLocalGame(int port, int size, boolean withBot) {
         try {
-            client.connect(ip, port);
-            buildGameScreen(initialSize);
+            GoServer.getInstance().stop();
+            GoServer.getInstance().start(port, size, withBot);
+            Thread.sleep(200);
+            connectToServer("localhost", port);
         } catch (Exception e) {
-            alertView.showAlert("Błąd", "Nie udało się połączyć: " + e.getMessage(), Alert.AlertType.ERROR);
+            alertView.showAlert("Błąd", "Nie udało się uruchomić serwera: " + e.getMessage(), Alert.AlertType.ERROR);
+            e.printStackTrace();
         }
     }
-    /**
-     * Sets up the main game interface once a connection is established.
-     * Organizes the layout with the game board in the center and control panels on the sides.
-     * @param size The size of the Go board (e.g., 9, 13, or 19).
-     */
-    private void buildGameScreen(int size) {
-        this.currentBoardSize = size;
-        gameRoot = new BorderPane();
 
-        VBox rightPanel = new VBox(10);
-        rightPanel.setPadding(new Insets(10));
+    private void connectToServer(String ip, int port) {
+        try {
+            if (client == null) client = new GoClient(this);
+            client.connect(ip, port);
+            initGameView();
+        } catch (IOException e) {
+            alertView.showAlert("Błąd połączenia", "Nie można połączyć z " + ip + ":" + port, Alert.AlertType.ERROR);
+        }
+    }
+
+    private void initGameView() {
+        gameRoot = new BorderPane();
+        gameRoot.setStyle("-fx-background-color: #333333;");
+
+        VBox sidePanel = new VBox(10);
+        sidePanel.setPadding(new Insets(10));
+        sidePanel.setStyle("-fx-background-color: #DDDDDD;");
+        sidePanel.setPrefWidth(250);
+        sidePanel.setMinWidth(250);
 
         messageArea = new TextArea();
         messageArea.setEditable(false);
-        messageArea.setPrefWidth(200);
+        messageArea.setWrapText(true);
         messageArea.setPrefHeight(400);
 
-        Button passBtn = new Button("Pasuj");
-        passBtn.setMaxWidth(Double.MAX_VALUE);
-        passBtn.setOnAction(e -> client.sendPass());
+        Button btnPass = new Button("PAS");
+        btnPass.setMaxWidth(Double.MAX_VALUE);
+        btnPass.setOnAction(e -> client.sendPass());
 
-        Button surrenderBtn = new Button("Poddaj się");
-        surrenderBtn.setMaxWidth(Double.MAX_VALUE);
-        surrenderBtn.setOnAction(e -> client.sendSurrender());
+        Button btnSurrender = new Button("PODDAJ SIĘ");
+        btnSurrender.setMaxWidth(Double.MAX_VALUE);
+        btnSurrender.setOnAction(e -> client.sendSurrender());
 
-        Button resumeBtn = new Button("Wznów grę (Spór)");
-        resumeBtn.setMaxWidth(Double.MAX_VALUE);
-        resumeBtn.setOnAction(e -> client.sendResume());
+        Button btnResume = new Button("WZNÓW GRĘ");
+        btnResume.setMaxWidth(Double.MAX_VALUE);
+        btnResume.setOnAction(e -> client.sendResume());
 
-        rightPanel.getChildren().addAll(messageArea, passBtn, surrenderBtn, resumeBtn);
-        gameRoot.setRight(rightPanel);
+        sidePanel.getChildren().addAll(new Label("Log gry:"), messageArea, btnPass, btnSurrender, btnResume, new Separator());
+        gameRoot.setRight(sidePanel);
 
-        createBoardView(size);
-        gameRoot.setCenter(boardPane);
+        Label loading = new Label("Oczekiwanie na dane planszy...");
+        loading.setTextFill(Color.WHITE);
+        gameRoot.setCenter(loading);
 
-        Scene gameScene = new Scene(gameRoot, 850, 600);
+        Scene gameScene = new Scene(gameRoot, 1100, 800);
+        primaryStage.setTitle("Go Game - Rozgrywka");
         primaryStage.setScene(gameScene);
         primaryStage.centerOnScreen();
     }
-    /**
-     * Creates the graphical representation of the Go board.
-     * Draws the grid lines and initializes the 'stones' array with hidden circles
-     * that act as placeholders for future moves.
-     * @param size The number of intersections per side.
-     */
+
+    public void updateBoard(String boardData) {
+        Platform.runLater(() -> {
+            String[] fields = boardData.split(";");
+            int totalFields = fields.length;
+            int calculatedSize = (int) Math.sqrt(totalFields);
+
+            if (calculatedSize != currentBoardSize || boardPane == null) {
+                currentBoardSize = calculatedSize;
+                createBoardView(currentBoardSize);
+
+                StackPane boardContainer = new StackPane(boardPane);
+                boardContainer.setPadding(new Insets(20));
+                boardContainer.setStyle("-fx-background-color: #333333;");
+
+                ScrollPane scrollPane = new ScrollPane(boardContainer);
+                scrollPane.setFitToWidth(true);
+                scrollPane.setFitToHeight(true);
+                scrollPane.setStyle("-fx-background: #333333; -fx-border-color: #333333;");
+
+                gameRoot.setCenter(scrollPane);
+            }
+
+            for (int i = 0; i < totalFields; i++) {
+                int x = i % currentBoardSize;
+                int y = i / currentBoardSize;
+
+                String field = fields[i];
+                Circle stone = stones[x][y];
+
+                if ("BLACK".equals(field)) {
+                    stone.setFill(Color.BLACK);
+                    stone.setStroke(Color.BLACK);
+                } else if ("WHITE".equals(field)) {
+                    stone.setFill(Color.WHITE);
+                    stone.setStroke(Color.BLACK);
+                } else {
+                    stone.setFill(Color.TRANSPARENT);
+                    stone.setStroke(Color.TRANSPARENT);
+                }
+            }
+        });
+    }
+
     private void createBoardView(int size) {
-        int cellSize = 30;
         boardPane = new Pane();
-        boardPane.setStyle("-fx-background-color: #DEB887;");
+
+        int boardPixelSize = (size + 1) * CELL_SIZE;
+
+        boardPane.setPrefSize(boardPixelSize, boardPixelSize);
+        boardPane.setMinSize(boardPixelSize, boardPixelSize);
+        boardPane.setStyle("-fx-background-color: #DCB35C; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.5), 10, 0, 0, 0);");
 
         stones = new Circle[size][size];
 
         for (int i = 0; i < size; i++) {
-            Line hLine = new Line(cellSize, (i + 1) * cellSize, size * cellSize, (i + 1) * cellSize);
-            Line vLine = new Line((i + 1) * cellSize, cellSize, (i + 1) * cellSize, size * cellSize);
-            boardPane.getChildren().addAll(hLine, vLine);
+            double offset = CELL_SIZE;
+
+            Line vLine = new Line(
+                    offset + i * CELL_SIZE, offset,
+                    offset + i * CELL_SIZE, offset + (size - 1) * CELL_SIZE
+            );
+            Line hLine = new Line(
+                    offset, offset + i * CELL_SIZE,
+                    offset + (size - 1) * CELL_SIZE, offset + i * CELL_SIZE
+            );
+            boardPane.getChildren().addAll(vLine, hLine);
         }
+
+        drawHoshi(size);
 
         for (int x = 0; x < size; x++) {
             for (int y = 0; y < size; y++) {
-                Rectangle clickArea = new Rectangle(cellSize, cellSize, Color.TRANSPARENT);
-                clickArea.setX((x + 0.5) * cellSize);
-                clickArea.setY((y + 0.5) * cellSize);
-
-                Circle stone = new Circle((x + 1) * cellSize, (y + 1) * cellSize, cellSize * 0.4);
+                Circle stone = new Circle(CELL_SIZE / 2.2);
+                stone.setCenterX(CELL_SIZE + x * CELL_SIZE);
+                stone.setCenterY(CELL_SIZE + y * CELL_SIZE);
                 stone.setFill(Color.TRANSPARENT);
                 stone.setStroke(Color.TRANSPARENT);
-                stones[x][y] = stone;
 
-                int finalX = x;
-                int finalY = y;
+                final int finalX = x;
+                final int finalY = y;
+                stone.setOnMouseClicked(e -> client.sendMove(finalX, finalY));
 
-                clickArea.setOnMouseClicked(e -> {
-                    client.sendMove(finalX, finalY);
+                stone.setOnMouseEntered(e -> {
+                    if (stone.getFill() == Color.TRANSPARENT) {
+                        stone.setStroke(Color.GRAY);
+                        stone.setStrokeWidth(2);
+                    }
+                });
+                stone.setOnMouseExited(e -> {
+                    if (stone.getFill() == Color.TRANSPARENT) {
+                        stone.setStroke(Color.TRANSPARENT);
+                    }
                 });
 
-                boardPane.getChildren().addAll(stone, clickArea);
-            }
-        }
-
-        boardPane.setPrefSize((size + 1) * cellSize + 20, (size + 1) * cellSize + 20);
-    }
-
-    /**
-     * Updates the visual state of the board based on data received from the server.
-     * If the board size has changed (e.g., when joining a new game), it regenerates the view.
-     * It maps the string data to the corresponding colors (BLACK, WHITE, or TRANSPARENT).
-     * @param boardData A string containing the state of all intersections, separated by semicolons.
-     */
-    public void updateBoard(String boardData) {
-
-        String[] fields = boardData.split(";");
-        int totalFields = fields.length;
-        int calculatedSize = (int) Math.sqrt(totalFields);
-
-        if (calculatedSize != currentBoardSize) {
-            currentBoardSize = calculatedSize;
-            createBoardView(currentBoardSize);
-            gameRoot.setCenter(boardPane);
-        }
-
-        for (int i = 0; i < totalFields; i++) {
-            int x = i % currentBoardSize;
-            int y = i / currentBoardSize;
-
-            String field = fields[i];
-            Circle stone = stones[x][y];
-
-            if (field.equals("BLACK")) {
-                stone.setFill(Color.BLACK);
-                stone.setStroke(Color.BLACK);
-            } else if (field.equals("WHITE")) {
-                stone.setFill(Color.WHITE);
-                stone.setStroke(Color.BLACK);
-            } else {
-                stone.setFill(Color.TRANSPARENT);
-                stone.setStroke(Color.TRANSPARENT);
+                stones[x][y] = stone;
+                boardPane.getChildren().add(stone);
             }
         }
     }
-    /**
-     * Appends a new message or log entry to the text area in the side panel.
-     * Automatically scrolls to the bottom to show the latest information.
-     * @param message The text to be added to the log.
-     */
+
+    private void drawHoshi(int size) {
+        if (size == 19 || size == 13 || size == 9) {
+            int[] points;
+            if (size == 19) points = new int[]{3, 9, 15};
+            else if (size == 13) points = new int[]{3, 6, 9};
+            else points = new int[]{2, 6};
+
+            for (int i : points) {
+                for (int j : points) {
+                    Circle dot = new Circle(CELL_SIZE + i * CELL_SIZE, CELL_SIZE + j * CELL_SIZE, 3);
+                    dot.setFill(Color.BLACK);
+                    boardPane.getChildren().add(dot);
+                }
+            }
+        }
+    }
+
     public void appendLog(String message) {
-        messageArea.appendText(message + "\n");
+        Platform.runLater(() -> {
+            messageArea.appendText(message + "\n");
+            messageArea.setScrollTop(Double.MAX_VALUE);
+        });
     }
 
+    private int parsePort(String text) {
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            alertView.showAlert("Błąd", "Nieprawidłowy numer portu.", Alert.AlertType.ERROR);
+            return -1;
+        }
+    }
+
+    private void styleButton(Button btn, String colorHex) {
+        btn.setStyle("-fx-background-color: " + colorHex + "; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-cursor: hand;");
+        btn.setPrefWidth(220);
+        btn.setPrefHeight(40);
+    }
 }

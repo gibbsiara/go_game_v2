@@ -1,171 +1,153 @@
 @startuml
-
 skinparam classAttributeIconSize 0
-skinparam linetype ortho
+skinparam monochrome true
+skinparam shadowing false
 
-package "Core Game Logic" {
+package "com.example (Core Logic)" {
+    class Game {
+        - board: Board
+        - playerBlack: Player
+        - playerWhite: Player
+        - currentPlayer: StoneColor
+        - ruleEngine: RuleEngine
+        - blackPrisoners: int
+        - whitePrisoners: int
+        - dbGameId: Long
+        + addPlayer(player: Player)
+        + processMove(x: int, y: int, color: StoneColor)
+        + processPass(color: StoneColor)
+        + processSurrender(color: StoneColor)
+    }
+
+    class Board {
+        - size: int
+        - grid: StoneColor[][]
+        + getStone(x: int, y: int): StoneColor
+        + setStone(x: int, y: int, color: StoneColor)
+        + getBoardStateString(): String
+        + getGridCopy(): StoneColor[][]
+    }
+
+    class RuleEngine {
+        - stateOneTurnAgo: StoneColor[][]
+        - stateTwoTurnsAgo: StoneColor[][]
+        + isMoveValid(board, x, y, color): boolean
+        + checkCaptures(board, x, y, color): boolean
+        - findGroupAndLiberties(...)
+    }
+
     enum StoneColor {
         BLACK
         WHITE
         EMPTY
     }
-
-    class Board {
-        - size : int
-        - grid : StoneColor[][]
-        + Board(size : int)
-        + initializeBoard()
-        + getStone(x : int, y : int) : StoneColor
-        + setStone(x : int, y : int, color : StoneColor)
-        + getGridCopy() : StoneColor[][]
-        + hasSameStateAs(otherGrid : StoneColor[][]) : boolean
-    }
-
-    class RuleEngine {
-        - playerBlack : ClientHandler
-        - playerWhite : ClientHandler
-        - previousBoardState : StoneColor[][]
-        + isMoveValid(board : Board, x : int, y : int, color : StoneColor) : boolean
-        + setPlayers(black : ClientHandler, white : ClientHandler)
-        + calculateScore(...) : String
-        - checkCapturesSimulation(...) : boolean
-        - removeDeadOpponentGroups(...) : List<int[]>
-        - countLiberties(...) : int
-        - isKo(...) : boolean
-    }
-
-    class Game {
-        - currentPlayer : StoneColor
-        - previousPlayerPassed : boolean
-        - isGameOver : boolean
-        - blackPrisoners : int
-        - whitePrisoners : int
-        + Game(size : int)
-        + addPlayer(player : ClientHandler)
-        + processMove(x : int, y : int, color : StoneColor)
-        + processPass(color : StoneColor)
-        + processSurrender(color : StoneColor)
-        + processResume(color : StoneColor)
-        - broadcastBoard()
-        - broadcastMessage(msg : String)
-    }
 }
 
-package "Server Side" {
-    class GoServer {
-        - {static} instance : GoServer
-        - serverSocket : ServerSocket
-        - isRunning : boolean
-        - GoServer()
-        + {static} getInstance() : GoServer
-        + start(port : int, size : int)
-        + stop()
+package "Networking & Clients" {
+    interface Player {
+        + sendMessage(msg: String)
     }
 
-    class ClientHandler implements Runnable {
-        - socket : Socket
-        - in : BufferedReader
-        - out : PrintWriter
-        - color : StoneColor
-        + ClientHandler(socket : Socket, game : Game, color : StoneColor)
+    class ClientHandler <<Runnable>> {
+        - socket: Socket
+        - game: Game
+        - color: StoneColor
         + run()
-        + sendMessage(message : String)
-        - processMoveCommand(inputLine : String)
+        + sendMessage(msg: String)
+    }
+
+    class BotPlayer <<Runnable>> {
+        - game: Game
+        - myColor: StoneColor
+        + makeBestMove()
+        + sendMessage(msg: String)
+    }
+
+    class GoServer {
+        {static} - instance: GoServer
+        - serverSocket: ServerSocket
+        + start(port, size, playWithBot)
+    }
+
+    class GoClient {
+        - socket: Socket
+        - gui: GoApplication
+        + connect(ip, port)
+        + sendMove(x, y)
+        + sendPass()
     }
 }
 
-package "Command Pattern" {
+package "Commands" {
     interface Command {
         + execute()
     }
 
-    class MoveCommand implements Command {
-        - x : int
-        - y : int
-        - color : StoneColor
-        + MoveCommand(game : Game, x : int, y : int, color : StoneColor)
+    class MoveCommand {
+        - x, y: int
         + execute()
     }
+    class PassCommand {
+     + execute() }
+    class SurrenderCommand {
+     + execute() }
+    class ResumeCommand {
+     + execute() }
+}
 
-    class PassCommand implements Command {
-        - playerColor : StoneColor
-        + PassCommand(game : Game, playerColor : StoneColor)
-        + execute()
+package "Persistence (Spring Boot)" {
+    class GameEntity {
+        - id: Long
+        - startTime: LocalDateTime
+        - result: String
     }
 
-    class SurrenderCommand implements Command {
-        - playerColor : StoneColor
-        + SurrenderCommand(game : Game, playerColor : StoneColor)
-        + execute()
+    class MoveEntity {
+        - x, y, moveNumber: int
+        - type: String
     }
 
-    class ResumeCommand implements Command {
-        - playerColor : StoneColor
-        + ResumeCommand(game : Game, playerColor : StoneColor)
-        + execute()
+    class GameService {
+        + createNewGame(size): Long
+        + saveMove(...)
+        + playReplayForClient(gameId, client)
     }
 }
 
-package "Client Side (JavaFX)" {
-    class GoApplication {
-        - currentBoardSize : int
-        - stones : Circle[][]
-        - messageArea : TextArea
-        - boardPane : Pane
-        + {static} main(args : String[])
-        + start(stage : Stage)
-        + updateBoard(boardData : String)
-        + appendLog(message : String)
-        - createBoardView(size : int)
+package "View (JavaFX)" {
+    class GoApplication <<Application>> {
+        - client: GoClient
+        - boardPane: Pane
+        + start(stage)
+        + updateBoard(state)
     }
-
-    class GoClient {
-        - socket : Socket
-        - out : PrintWriter
-        - in : BufferedReader
-        + GoClient(gui : GoApplication)
-        + connect(ip : String, port : int)
-        + sendMove(x : int, y : int)
-        + sendPass()
-        + sendSurrender()
-        + sendQuit()
-        - listenForServer()
-    }
-
     class AlertView {
-        + showAlert(title : String, message : String, type : AlertType)
-    }
-
-    class ConsoleView {
-        - scanner : Scanner
-        + displayMessage(msg : String)
-        + displayBoard(boardData : String)
-        + getUserInput() : String
+        + showAlert(title, msg, type)
     }
 }
 
-
-GoServer --> Game : creates >
-GoServer ..> ClientHandler : creates >
+' Relationships
 Game *-- Board
 Game *-- RuleEngine
-Game o-- "2" ClientHandler : manages >
-RuleEngine --> ClientHandler : notifies >
-RuleEngine ..> Board : analyzes >
+Game o-- Player
+RuleEngine ..> Board
 
-ClientHandler --> Game : references >
-ClientHandler ..> Command : creates & executes >
-ClientHandler --> StoneColor : has >
+ClientHandler ..|> Player
+BotPlayer ..|> Player
+ClientHandler --> Command : creates
+MoveCommand ..|> Command
+PassCommand ..|> Command
+SurrenderCommand ..|> Command
+ResumeCommand ..|> Command
+Command --> Game : executes on
 
-MoveCommand --> Game
-PassCommand --> Game
-SurrenderCommand --> Game
-ResumeCommand --> Game
+GoServer --> Game
+GoServer --> ClientHandler
+GoClient --> GoApplication
+GoApplication --> GoClient
 
-GoApplication --|> javafx.application.Application
-GoApplication --> GoClient : uses >
-GoClient --> GoApplication : updates GUI >
-GoApplication --> AlertView : uses >
-GoApplication --> ConsoleView : optionally uses >
+GameService --> GameEntity
+GameService --> MoveEntity
+Game --> GameService
 
 @enduml

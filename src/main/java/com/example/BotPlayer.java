@@ -24,7 +24,7 @@ public class BotPlayer implements Player, Runnable {
 
     @Override
     public void sendMessage(String msg) {
-        if (msg.contains("Twój ruch")) {
+        if (msg.contains("Twój ruch") || msg.contains("Przeciwnik spasował")) {
             failedMovesInThisTurn.clear();
             try { Thread.sleep(500); } catch (InterruptedException e) {}
             makeBestMove();
@@ -45,7 +45,7 @@ public class BotPlayer implements Player, Runnable {
     }
 
     /**
-     * Główna logika: Ocenia każde pole i wybiera to z najwyższym wynikiem.
+     * Main logic: grading all fields on the grid and chooses the one with the highest score.
      */
     private void makeBestMove() {
         Board board = game.getBoard();
@@ -85,7 +85,7 @@ public class BotPlayer implements Player, Runnable {
     }
 
     /**
-     * System oceny ruchu. Im więcej punktów, tym lepszy ruch.
+     * Mechanism of move grading - higher score = better move.
      */
     private double evaluateMove(Board board, int x, int y) {
         double score = 0;

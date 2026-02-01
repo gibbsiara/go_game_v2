@@ -87,9 +87,6 @@ public class Game {
             return;
         }
 
-        notifyPlayer(playerColor, "MESSAGE Spasowałeś.");
-        notifyPlayer(getOpponent(playerColor), "MESSAGE Przeciwnik spasował.");
-
         if (persistenceEnabled && gameService != null && dbGameId != null) {
             moveCounter++;
             gameService.saveMove(dbGameId, moveCounter, -1, -1, playerColor, "PASS");
@@ -102,19 +99,21 @@ public class Game {
             switchTurn();
             broadcastMessage("MESSAGE Tura gracza: " + currentPlayer);
         }
+        notifyPlayer(playerColor, "MESSAGE Spasowałeś.");
+        notifyPlayer(getOpponent(playerColor), "MESSAGE Przeciwnik spasował.");
     }
 
     public synchronized void processSurrender(StoneColor playerColor) {
         if (isGameOver) return;
         isGameOver = true;
         StoneColor winner = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
-        
+
         if (persistenceEnabled && gameService != null && dbGameId != null) {
              moveCounter++;
              gameService.saveMove(dbGameId, moveCounter, -1, -1, playerColor, "SURRENDER");
              gameService.finishGame(dbGameId, winner + "_WON");
         }
-        
+
         broadcastMessage("MESSAGE Gracz " + playerColor + " poddał się. Wygrywa " + winner + "!");
     }
 
@@ -146,7 +145,7 @@ public class Game {
             sb.append("REMIS!");
             result = "DRAW";
         }
-        
+
         if (persistenceEnabled && gameService != null && dbGameId != null) {
             gameService.finishGame(dbGameId, result);
         }

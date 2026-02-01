@@ -101,9 +101,37 @@ public class GoApplication extends Application {
         });
         joinBox.getChildren().addAll(ipField, btnJoin);
 
-        root.getChildren().addAll(titleLabel, configGrid, hostLabel, btnVsBot, btnHostPvP, joinLabel, joinBox);
+        Label replayLabel = new Label("--- Powtórki (Replay) ---");
+        replayLabel.setStyle("-fx-font-weight: bold; -fx-padding: 10 0 5 0;");
 
-        Scene scene = new Scene(root, 450, 650);
+        HBox replayBox = new HBox(10);
+        replayBox.setAlignment(Pos.CENTER);
+        TextField gameIdField = new TextField("1");
+        gameIdField.setPromptText("ID Gry");
+        gameIdField.setPrefWidth(60);
+
+        Button btnReplay = new Button("Oglądaj");
+        styleButton(btnReplay, "#9C27B0");
+        btnReplay.setPrefWidth(100);
+        btnReplay.setOnAction(e -> {
+            int port = parsePort(portField.getText());
+            if (port > 0) {
+                connectToServer("localhost", port);
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(500);
+                        client.sendMessage("REPLAY " + gameIdField.getText());
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                }).start();
+            }
+        });
+        replayBox.getChildren().addAll(new Label("ID:"), gameIdField, btnReplay);
+
+        root.getChildren().addAll(titleLabel, configGrid, hostLabel, btnVsBot, btnHostPvP, joinLabel, joinBox, replayLabel, replayBox);
+
+        Scene scene = new Scene(root, 450, 700);
         primaryStage.setTitle("Go Game - Menu");
         primaryStage.setScene(scene);
         primaryStage.centerOnScreen();
@@ -124,7 +152,7 @@ public class GoApplication extends Application {
 
     private void connectToServer(String ip, int port) {
         try {
-            if (client == null) client = new GoClient(this);
+            client = new GoClient(this);
             client.connect(ip, port);
             initGameView();
         } catch (IOException e) {
@@ -167,9 +195,12 @@ public class GoApplication extends Application {
         gameRoot.setCenter(loading);
 
         Scene gameScene = new Scene(gameRoot, 1100, 800);
-        primaryStage.setTitle("Go Game - Rozgrywka");
-        primaryStage.setScene(gameScene);
-        primaryStage.centerOnScreen();
+        
+        Platform.runLater(() -> {
+            primaryStage.setTitle("Go Game - Rozgrywka");
+            primaryStage.setScene(gameScene);
+            primaryStage.centerOnScreen();
+        });
     }
 
     public void updateBoard(String boardData) {

@@ -18,52 +18,59 @@ public class Game {
     private int blackPrisoners = 0;
     private int whitePrisoners = 0;
 
-    /**
-     * Creates a new game session with a board of the specified size.
-     */
+    private GameService gameService;
+    private Long dbGameId;
+    private int moveCounter = 0;
+    private boolean persistenceEnabled = true;
+
     public Game(int size) {
         this.board = new Board(size);
         this.currentPlayer = StoneColor.BLACK;
         this.ruleEngine = new RuleEngine();
     }
 
-    /**
-     * Assigns players to the game session (first Black, then White).
-     * Accepts any object implementing the Player interface (Human or Bot).
-     */
+    public void setGameService(GameService service) {
+        this.gameService = service;
+        if (this.gameService != null && persistenceEnabled) {
+            this.dbGameId = this.gameService.createNewGame(board.getSize());
+        }
+    }
+
+    public void setPersistenceEnabled(boolean enabled) {
+        this.persistenceEnabled = enabled;
+    }
+
     public synchronized void addPlayer(Player player) {
         if (playerBlack == null) {
             playerBlack = player;
-            if (player instanceof ClientHandler) {
-            }
         } else if (playerWhite == null) {
             playerWhite = player;
         }
-
         ruleEngine.setPlayers(playerBlack, playerWhite);
     }
 
-    /**
-     * Processes a move attempt by a player.
-     */
     public synchronized void processMove(int x, int y, StoneColor playerColor) {
         if (isGameOver) {
             notifyPlayer(playerColor, "MESSAGE Gra zakończona. Nie można wykonywać ruchów.");
             return;
         }
 
-        if (playerColor != currentPlayer) {
+        if (persistenceEnabled && playerColor != currentPlayer) {
             notifyPlayer(playerColor, "MESSAGE To nie jest Twój ruch!");
             return;
         }
 
         if (ruleEngine.isMoveValid(board, x, y, playerColor)) {
-
             int captured = ruleEngine.getLastCapturedCount();
             if (playerColor == StoneColor.BLACK) {
                 blackPrisoners += captured;
             } else {
                 whitePrisoners += captured;
+            }
+
+            if (persistenceEnabled && gameService != null && dbGameId != null) {
+                moveCounter++;
+                gameService.saveMove(dbGameId, moveCounter, x, y, playerColor, "MOVE");
             }
 
             previousPlayerPassed = false;
@@ -72,19 +79,21 @@ public class Game {
         }
     }
 
-    /**
-     * Processes a PASS command. Two consecutive passes end the game.
-     */
     public synchronized void processPass(StoneColor playerColor) {
         if (isGameOver) return;
 
-        if (playerColor != currentPlayer) {
+        if (persistenceEnabled && playerColor != currentPlayer) {
             notifyPlayer(playerColor, "MESSAGE To nie jest Twój ruch!");
             return;
         }
 
         notifyPlayer(playerColor, "MESSAGE Spasowałeś.");
         notifyPlayer(getOpponent(playerColor), "MESSAGE Przeciwnik spasował.");
+
+        if (persistenceEnabled && gameService != null && dbGameId != null) {
+            moveCounter++;
+            gameService.saveMove(dbGameId, moveCounter, -1, -1, playerColor, "PASS");
+        }
 
         if (previousPlayerPassed) {
             endGame();
@@ -95,26 +104,29 @@ public class Game {
         }
     }
 
-    /**
-     * Handles surrender.
-     */
     public synchronized void processSurrender(StoneColor playerColor) {
         if (isGameOver) return;
         isGameOver = true;
         StoneColor winner = (playerColor == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
+        
+        if (persistenceEnabled && gameService != null && dbGameId != null) {
+             moveCounter++;
+             gameService.saveMove(dbGameId, moveCounter, -1, -1, playerColor, "SURRENDER");
+             gameService.finishGame(dbGameId, winner + "_WON");
+        }
+        
         broadcastMessage("MESSAGE Gracz " + playerColor + " poddał się. Wygrywa " + winner + "!");
     }
 
-    /**
-     * Calculates score and ends the game.
-     */
+    public synchronized void processResume(StoneColor playerColor) {
+    }
+
     private void endGame() {
         isGameOver = true;
 
         int[] territories = ruleEngine.countTerritory(board);
         int blackTerritory = territories[0];
         int whiteTerritory = territories[1];
-
         double finalBlackScore = blackTerritory + blackPrisoners;
         double finalWhiteScore = whiteTerritory + whitePrisoners;
 
@@ -123,12 +135,20 @@ public class Game {
         sb.append("CZARNY: Teren=" + blackTerritory + ", Jeńcy=" + blackPrisoners + " -> SUMA: " + finalBlackScore + "\n");
         sb.append("BIAŁY:  Teren=" + whiteTerritory + ", Jeńcy=" + whitePrisoners + " -> SUMA: " + finalWhiteScore + "\n");
 
+        String result;
         if (finalBlackScore > finalWhiteScore) {
             sb.append("Wygrywa CZARNY!");
+            result = "BLACK_WON";
         } else if (finalWhiteScore > finalBlackScore) {
             sb.append("Wygrywa BIAŁY!");
+            result = "WHITE_WON";
         } else {
             sb.append("REMIS!");
+            result = "DRAW";
+        }
+        
+        if (persistenceEnabled && gameService != null && dbGameId != null) {
+            gameService.finishGame(dbGameId, result);
         }
 
         broadcastMessage(sb.toString());
@@ -142,9 +162,6 @@ public class Game {
         return (color == StoneColor.BLACK) ? StoneColor.WHITE : StoneColor.BLACK;
     }
 
-    /**
-     * Sends the current board state to all players.
-     */
     private void broadcastState() {
         String state = board.getBoardStateString();
         String prisonersMsg = " (Jeńcy: B=" + blackPrisoners + ", W=" + whitePrisoners + ")";
@@ -175,10 +192,7 @@ public class Game {
         }
     }
 
-    public synchronized void processResume(StoneColor playerColor) {
-    }
     public synchronized Board getBoard() {
         return board;
     }
-
 }

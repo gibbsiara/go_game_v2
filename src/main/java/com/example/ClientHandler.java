@@ -26,7 +26,6 @@ public class ClientHandler implements Runnable, Player {
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
             sendMessage("Twój kolor to: " + color);
-
             sendMessage("BOARD " + game.getBoard().getBoardStateString());
 
             while (true) {
@@ -47,6 +46,21 @@ public class ClientHandler implements Runnable, Player {
                     new SurrenderCommand(game, color).execute();
                 } else if (inputLine.startsWith("RESUME")) {
                     new ResumeCommand(game, color).execute();
+                } else if (inputLine.startsWith("REPLAY")) {
+                    try {
+                        String[] parts = inputLine.split(" ");
+                        Long gameId = Long.parseLong(parts[1]);
+                        
+                        GameService service = GoServer.getInstance().getGameService();
+                        if (service != null) {
+                            service.playReplayForClient(gameId, this);
+                        } else {
+                            sendMessage("MESSAGE Błąd: Serwis gry niedostępny.");
+                        }
+                    } catch (Exception e) {
+                        sendMessage("MESSAGE Błąd komendy replay: " + e.getMessage());
+                        e.printStackTrace();
+                    }
                 }
             }
         } catch (IOException e) {
